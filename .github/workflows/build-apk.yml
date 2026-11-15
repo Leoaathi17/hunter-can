@@ -23,10 +23,8 @@ jobs:
       - name: Core tests (javac, no Android)
         run: core/run_tests.sh
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install SDK platform and build tools
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true; "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
 
       # setup-gradle provides Gradle 8.7 itself, so this works even if gradlew / gradle-wrapper.jar were not uploaded.
       - uses: gradle/actions/setup-gradle@v4
