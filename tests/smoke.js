@@ -29,8 +29,13 @@ await test('syntax: index.html script, sw.js, manifest JSON, python analyzer',()
 });
 await test('no external network or CDN dependencies',()=>{
   const h=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
-  const ext=h.match(/(?:src|href)=["']https?:[^"']+|url\(["']?https?:|@import|\bfetch\(|XMLHttpRequest|WebSocket|sendBeacon/g);
-  eq(ext,null,'external refs');return 'none found';
+  // v3: the optional WebSocket bridge adapter is the only network API. It must be exactly one `new WebSocket(url)` fed by the user's own URL setting, never a literal address.
+  const ext=h.match(/(?:src|href)=["']https?:[^"']+|url\(["']?https?:|@import|\bfetch\(|XMLHttpRequest|sendBeacon/g);
+  eq(ext,null,'external refs');
+  const ws=h.match(/new WebSocket\(/g)||[];eq(ws.length,1,'single WebSocket construction site');
+  ok(/new WebSocket\(url\)/.test(h),'WebSocket opened only with the user-supplied url variable');ok(!/new WebSocket\(["'`]/.test(h),'no hard-coded WebSocket address');
+  ok(!/["'`]wss?:\/\/[a-z0-9]/i.test(h.replace(/placeholder="[^"]*"/g,'')),'no literal ws:// address except input placeholder');
+  return 'none found; one user-driven WebSocket site';
 });
 // 2 ---------------------------------------------------------------- real data
 await test('parser: real capture sample.txt = 42580 frames, matches Python parse per ID',()=>{
@@ -419,7 +424,7 @@ await test('service worker: cache version bumped, file list complete, old caches
   const mkCache=n=>{if(!caches.has(n))caches.set(n,new Map());const m=caches.get(n);return {addAll:async l=>{for(const u of l)m.set('https://x.github.io/'+u.replace('./',''),'x');},put:async(r,v)=>{m.set(r.url,v);},match:async r=>m.get(r.url)};};
   const self={addEventListener:(t,f)=>{handlers[t]=f;},skipWaiting(){},clients:{claim:async()=>{}},location:{origin:'https://x.github.io'}};
   const ctx=vm.createContext({self,caches:{open:async n=>mkCache(n),keys:async()=>[...caches.keys()],delete:async n=>caches.delete(n),match:async r=>{for(const m of caches.values())if(m.has(r.url))return m.get(r.url);}},fetch:()=>Promise.reject(new Error('offline')),URL});
-  vm.runInContext(src,ctx);const V=vm.runInContext('V',ctx),F=vm.runInContext('F',ctx);ok(V!=='hunter-v1'&&/^hcl-v2/.test(V),'version '+V);
+  vm.runInContext(src,ctx);const V=vm.runInContext('V',ctx),F=vm.runInContext('F',ctx);ok(V!=='hunter-v1'&&/^hcl-v3/.test(V),'version '+V);
   for(const f of F){if(f!=='./')ok(fs.existsSync(path.join(ROOT,f)),'missing file '+f);}
   for(const need of ['./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png'])ok(F.includes(need),'F has '+need);
   let p;handlers.install({waitUntil:x=>{p=x;}});await p;ok(caches.get(V).size===F.length,'precached');

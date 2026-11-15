@@ -1,0 +1,142 @@
+[
+ {
+  "name": "gs_usb: host frame encode/decode round trip (20 bytes, echo ids, 11/29-bit, RTR, error flag)",
+  "ok": true,
+  "detail": "20-byte layout, EFF/RTR/ERR flags, echo ids, host-format and mode structs verified"
+ },
+ {
+  "name": "gs_usb: bit timing for 48 MHz and 80 MHz clocks (exact, 87.5% sample point, SJW 1)",
+  "ok": true,
+  "detail": "48 MHz: 10k..1M exact; 80 MHz: 10k..1M exact except 750k (refused); 500k = brp 6 / 13+2 tq at 48 MHz"
+ },
+ {
+  "name": "gs_usb transport (mock WebUSB): open sequence, listen-only start flag, RX/echo/error handling, TX only in normal mode",
+  "ok": true,
+  "detail": "init order HOST_FORMAT, DEVICE_CONFIG, BT_CONST, RESET, BITTIMING, START(listen-only); diag START(normal); echo/error frames filtered"
+ },
+ {
+  "name": "gs_usb: firmware without listen-only support is refused in Monitor mode; 80 MHz clock gives brp 10; reconnect finds the device",
+  "ok": true,
+  "detail": "unsupported listen-only -> no start; 80 MHz -> brp 10"
+ },
+ {
+  "name": "ELM327 line parser: frames, multi-line, NO DATA, SEARCHING, errors, 29-bit",
+  "ok": true,
+  "detail": "frames, 29-bit, NO DATA, SEARCHING, STOPPED, errors, banners, junk"
+ },
+ {
+  "name": "ELM327: init sequence, monitor-all frames into the pipeline, only AT setup commands in Monitor mode",
+  "ok": true,
+  "detail": "ATZ ATE0 ATL0 ATS1 ATH1 ATSP6 ATCAF0 ATCSM1 ATMA; requests/ATSH/ATCAF1 blocked in Monitor"
+ },
+ {
+  "name": "ELM327: protocol by profile (ATSP6 then ATSP8 for 250k), unsupported bitrates refused",
+  "ok": true,
+  "detail": "ATSP6 baseline, ATSP8 for 250k, 29-bit maps to 7/9, 125k refused"
+ },
+ {
+  "name": "ELM327 Diagnostics: stop monitor, ATCAF1, requests via ATSH, multiline VIN/DTC, NO DATA, no app-side flow control",
+  "ok": true,
+  "detail": "diag over ELM: stop, ATCAF1, ATSH7DF, 03/0902 multiline parsed, NO DATA handled, monitor restored"
+ },
+ {
+  "name": "ELM327 over Web Bluetooth BLE-UART: service discovery (FFF0), 20-byte chunks, init and monitoring over notifications",
+  "ok": true,
+  "detail": "FFF0 UART found, notifications parsed, writes chunked to 20 bytes"
+ },
+ {
+  "name": "ISO-TP receive: single frame, multi-frame with padding, flow control request, sequence wrap, errors",
+  "ok": true,
+  "detail": "SF, FF+CF reassembly, FC callback, padding, interleaved ECUs, seq wrap, seq/timeout errors"
+ },
+ {
+  "name": "DTC decode vectors (SAE J2012 two-bit system + two-bit digit encoding) and generic description table",
+  "ok": true,
+  "detail": "P0133, C0123, B0001, U0123 + 10 more vectors; table is generic P0xxx only; JS and Python agree"
+ },
+ {
+  "name": "Mode 03/07/0A/09/01 response parsing: count byte, padding, no-count ECUs, VIN, PID bitmap, readiness",
+  "ok": true,
+  "detail": "DTC count/no-count/padding, Mode 07/0A, VIN, PID bitmaps, monitor status, 8 live PID formulas"
+ },
+ {
+  "name": "mode switch: SLCAN M1 -> M0 on entering Diagnostics, M1 again on returning; USBtin L/O style; banner, chip, events",
+  "ok": true,
+  "detail": "M style C,S6,M0,O / C,S6,M1,O; L style C,S6,O / C,S6,L; events + banner + warning screen gating"
+ },
+ {
+  "name": "Monitor mode never transmits: allow-list, transport guards, SLCAN data frames, Diagnostics calls all refused",
+  "ok": true,
+  "detail": "allow-list, transport guard, mode guard, ECU saw 0 data frames; 1 sendFrame + 1 sendRequest call site, both inside diagTx"
+ },
+ {
+  "name": "Diagnostics reads over SLCAN: supported PIDs chain, live PIDs, MIL, VIN (multi-frame + 30 00 00 flow control), Mode 03/07/0A incl. 2 ECUs",
+  "ok": true,
+  "detail": "PID chain, 8 live PIDs, MIL, VIN multi-frame with FC, Mode 03/07/0A with 2 ECUs"
+ },
+ {
+  "name": "Diagnostics: only standard OBD-II payloads and ids can be transmitted (no UDS, no write/security/routine/flash, no raw sender)",
+  "ok": true,
+  "detail": "26 non-OBD services, 8 foreign ids, FF/CF/odd FC frames refused; only standard requests reached the adapter; no raw sender in source or UI"
+ },
+ {
+  "name": "Mode 04 clear flow: guards (no confirm, no prior read, outside Diagnostics, RPM seen, ECU RPM/speed > 0), success path, re-read and report",
+  "ok": true,
+  "detail": "confirm/review/mode/RPM/ECU-RPM/speed guards each refuse before Mode 04; success: 04 then 03 re-read, report; negative response reported"
+ },
+ {
+  "name": "Diagnostics UI flow: DTC list rendering, clear box -> typed CLEAR -> result text; link drop while in Diagnostics falls back to Monitor; \"z\" tx acks are not errors",
+  "ok": true,
+  "detail": "DTC rendering (generic text / raw), clear result text, reconnect lands in Monitor"
+ },
+ {
+  "name": "RPM seen: window, sources (OBD, Hunter 0x100, user decoder) and expiry",
+  "ok": true,
+  "detail": "OBD / Hunter / user decoder sources; 10 s window; 5 s OBD staleness"
+ },
+ {
+  "name": "rate limit: 50 ms between requests, 30 frames per second, flow control exempt from the gap but not the cap",
+  "ok": true,
+  "detail": "min gap 50 ms enforced (refused, not queued), cap 30/s enforced, FC exempt from gap only"
+ },
+ {
+  "name": "idle timeout returns to Monitor on its own; reset on disconnect; Hunter profile shows experimental note",
+  "ok": true,
+  "detail": "auto-return after 5 min idle; warning and Hunter-experimental text present"
+ },
+ {
+  "name": "capture file: every transmitted frame is a \"# TX\" line; analyzer parses TX, MODE, DTC and VIN responses",
+  "ok": true,
+  "detail": "9 # TX lines (one per frame), MODE events, DTC/VIN decode, Mode 04 warning, ELM isotp lines parse"
+ },
+ {
+  "name": "adapter picker: only options the browser supports are listed; default; persistence; switching blocked while connected",
+  "ok": true,
+  "detail": "7 adapter types; every combination of Serial/USB/Bluetooth/WebSocket availability lists exactly the supported ones"
+ },
+ {
+  "name": "SLCAN over Web Serial: baud and VID/PID filter options (any device, preset, custom), reconnect finds the same device",
+  "ok": true,
+  "detail": "filters: none / preset / custom VID / custom VID:PID; baud applied; reconnect by remembered VID:PID"
+ },
+ {
+  "name": "SLCAN over WebUSB CDC (endpoint discovery, DTR, line coding)",
+  "ok": true,
+  "detail": "bulk endpoints found from descriptors, SLCAN works identically"
+ },
+ {
+  "name": "WebSocket bridge (SLCAN text): URL validation, setup commands, frames, drop -> reconnect; BLE-UART SLCAN bridge",
+  "ok": true,
+  "detail": "ws:// / wss:// only, same allow-list over WebSocket, reconnect; BLE bridge speaks SLCAN"
+ },
+ {
+  "name": "audit: every adapter command and data frame seen by all simulators happened in the right mode",
+  "ok": true,
+  "detail": "20 commands and 2 data frames, all in the right mode"
+ },
+ {
+  "name": "UI statics: Diagnostics tab, mode banner, return button, adapter picker, SW cache v3, manifest text",
+  "ok": true,
+  "detail": "ok"
+ }
+]

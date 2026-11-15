@@ -6,7 +6,7 @@
 <title>Hunter CAN Live</title>
 <meta name="theme-color" content="#050a14">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Read-only live CAN bus viewer for motorcycles and cars (CANable SLCAN, listen-only).">
+<meta name="description" content="Live CAN bus viewer for motorcycles and cars (listen-only by default) with an optional, opt-in OBD-II diagnostics tool.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -19,7 +19,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
 body{background:radial-gradient(1100px 650px at 85% -10%,#0d2b46 0,transparent 60%),radial-gradient(900px 600px at -10% 110%,#082a30 0,transparent 55%),var(--bg);
-color:var(--ink);font:15px/1.4 var(--sans);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"top" "main" "nav";height:100dvh;overflow:hidden}
+color:var(--ink);font:15px/1.4 var(--sans);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"top" "mode" "main" "nav";height:100dvh;overflow:hidden}
 [hidden]{display:none!important}
 #top{grid-area:top;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--st)) calc(12px + var(--sr)) 8px calc(12px + var(--sl));border-bottom:1px solid var(--line);background:rgba(5,10,20,.82);backdrop-filter:blur(12px)}
 .brand{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
@@ -30,6 +30,14 @@ color:var(--ink);font:15px/1.4 var(--sans);display:grid;grid-template-columns:mi
 .chip .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 8px currentColor;color:var(--bad)}
 .chip.on .dot{background:var(--ok);color:var(--ok);animation:pulse 2.2s ease-in-out infinite}
 .chip.wait .dot{background:var(--warn);color:var(--warn)}
+.chip.diag{border-color:rgba(251,191,36,.7)}.chip.diag .dot{background:var(--warn);color:var(--warn)}
+.modebar{grid-area:mode;display:flex;align-items:center;gap:10px;min-height:30px;padding:3px calc(12px + var(--sr)) 3px calc(12px + var(--sl));font-size:12px;border-bottom:1px solid var(--line)}
+.modebar b{font:700 12px var(--mono);letter-spacing:.06em;white-space:nowrap}
+.modebar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modebar.mon{background:rgba(8,40,32,.6);color:var(--ok)}.modebar.mon span{color:var(--mut)}
+.modebar.diag{background:repeating-linear-gradient(135deg,rgba(251,191,36,.24) 0 12px,rgba(251,191,36,.13) 12px 24px);color:var(--warn);border-bottom-color:rgba(251,191,36,.6)}
+.modebar.diag span{color:var(--ink)}
+.modebar .btn{min-height:44px;padding:0 12px;font-size:13px;white-space:nowrap}
 .chip small{font:600 11px var(--mono);padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.08)}
 .chip small.s0{color:var(--ok)}.chip small.s1{color:var(--warn)}.chip small.s2{color:var(--bad)}
 @keyframes pulse{50%{opacity:.45}}
@@ -46,6 +54,15 @@ nav button[aria-selected=true]::before{content:"";position:absolute;top:0;left:2
 .note{color:var(--mut);font-size:13px}
 .ro{border-color:rgba(52,211,153,.4);background:rgba(8,40,32,.55);font-size:13px}
 .ro b{color:var(--ok)}
+.warnbox{border-color:rgba(251,191,36,.55);background:rgba(58,42,8,.5)}
+.warnbox b{color:var(--warn)}
+.modal{position:fixed;inset:0;z-index:20;background:rgba(2,5,10,.88);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:calc(14px + var(--st)) 12px calc(14px + var(--sb))}
+.modal .card{max-width:520px;width:100%}
+.modal ul{margin:6px 0;padding-left:20px;font-size:14px}.modal li{margin:6px 0}
+.chk{display:flex;gap:10px;align-items:center;min-height:48px;font-size:14px}
+input[type=checkbox]{width:44px;height:44px;min-height:44px;accent-color:#22d3ee;flex:none}
+.dtc{padding:6px 0;border-bottom:1px solid rgba(120,205,255,.09);font-size:14px}.dtc b{font-family:var(--mono);color:var(--warn)}
+.dtcEcu{margin:6px 0}
 button,select,input,textarea{font:inherit}
 .btn{min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:rgba(34,211,238,.1);color:var(--ink);font-weight:600;font-size:15px;cursor:pointer}
 .btn.pri{background:linear-gradient(135deg,#22d3ee,#2dd4bf);color:#031318;border:0;box-shadow:var(--glow)}
@@ -118,7 +135,7 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
 @media (max-width:480px){.brand>div{display:none}.chip{padding:0 10px}}
 @media (min-width:700px){.hero{grid-template-columns:1fr 1fr;align-items:center}}
 @media (orientation:landscape) and (max-height:520px){
- body{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"top top" "nav main"}
+ body{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"top top" "mode mode" "nav main"}
  nav#tabs{flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:0 0 var(--sb) var(--sl);width:calc(76px + var(--sl))}
  nav button{min-height:56px;flex:1}
  nav button[aria-selected=true]::before{top:22%;bottom:22%;left:0;right:auto;width:2px;height:auto}
@@ -137,7 +154,7 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
   <div class="chip off" id="chip" role="status" aria-live="polite"><i class="dot"></i><span id="st">Not connected</span><small id="chipHealth" class="s9" hidden>OK</small></div>
   <button class="btn sm pri" id="bConn">Connect</button>
 </header>
-
+<div class="modebar mon" id="modeBar" role="status" aria-live="polite"><b id="modeTxt">MONITOR · read-only</b><span id="modeSub">Listen-only. No data frames are transmitted.</span><button class="btn sm" id="bToMon" hidden>Return to Monitor</button></div>
 <main id="main">
 <!-- ========== LIVE ========== -->
 <section class="panel" data-tab="live" id="tab-live" role="tabpanel">
@@ -148,7 +165,7 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
       <li>Switch the ignition on (engine can stay off).</li>
       <li>Tap <b>Connect</b> and pick the CANable in the list.</li>
     </ol>
-    <p class="note">The app only listens. Pick your vehicle in Settings first if it is not the Hunter 350.</p>
+    <p class="note">In Monitor mode the app only listens. Pick your vehicle and adapter type in Settings first if they are not the Hunter 350 and a CANable.</p>
     <div class="row"><button class="btn pri" id="bOnbConn">Connect</button><button class="btn" id="bOnbOk">Got it</button></div>
   </div>
 
@@ -289,7 +306,7 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
 
 <!-- ========== HEALTH ========== -->
 <section class="panel" data-tab="health" id="tab-health" role="tabpanel" hidden>
-  <div class="card ro"><b>Read-only.</b> This app only listens. It never sends CAN data and never clears or writes ECU fault codes (DTCs), because that would require transmitting to the vehicle.</div>
+  <div class="card ro"><b>Monitor mode is read-only.</b> In Monitor mode this app only listens. It never sends CAN data and never clears or writes ECU fault codes (DTCs). The optional Diagnostics mode (off by default) is the only mode that transmits, and only standard OBD-II requests.</div>
   <div class="card">
     <div class="stat"><div class="lvl s9" id="hLvl">IDLE</div><div class="note" id="hSum">Not connected.</div></div>
     <ul class="plain" id="hReasons"></ul>
@@ -327,21 +344,83 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
     <p class="note">Both 11-bit and 29-bit frames are always parsed. 29-bit IDs display as 8 hex digits. The ID format only filters what is shown and recorded.</p>
     <div class="row"><button class="btn" id="bDetect" disabled>Auto-detect bitrate</button><span class="note" id="detInfo">Tries 500k, 250k, 125k, 1M, listen-only.</span></div>
   </div>
-  <div class="card">
-    <h2>Connection</h2>
+  <div class="card" id="adCard">
+    <h2>Adapter</h2>
+    <label class="f">Adapter type<select id="adSel"></select></label>
+    <p class="note" id="adNote"></p>
+    <div class="row tight" id="adSerialRow"><label class="f">Serial baud<select id="baudSel"></select></label></div>
+    <div class="row tight" id="adFiltRow"><label class="f">Device filter<select id="filtSel"></select></label></div>
+    <div class="row tight" id="adCustomRow" hidden><label class="f">VID (hex)<input id="vidIn" placeholder="16D0" autocapitalize="characters" autocomplete="off"></label><label class="f">PID (hex, optional)<input id="pidIn" placeholder="117E" autocapitalize="characters" autocomplete="off"></label></div>
+    <div class="row tight" id="adStyleRow"><label class="f">SLCAN listen-only style<select id="styleSel"><option value="M">M1 / M0 then O (CANable, CANtact)</option><option value="L">L opens listen-only (USBtin)</option></select></label></div>
+    <div class="row tight" id="adWsRow" hidden><label class="f">WebSocket URL<input id="wsUrl" placeholder="wss://gateway.local:81" autocapitalize="off" autocomplete="off" spellcheck="false"></label></div>
     <div class="row">
-      <button class="btn pri" id="bSerial">Connect (Web Serial)</button>
-      <button class="btn" id="bUsb">Connect (WebUSB)</button>
+      <button class="btn pri" id="bSerial">Connect</button>
       <button class="btn" id="bDisc" disabled>Disconnect</button>
     </div>
-    <p class="note">Listen-only always. The only adapter commands ever sent are C (close), S0 to S8 (bitrate), M1 (silent mode), O (open) and V (version). No CAN data frame is ever transmitted.</p>
+    <p class="note">In Monitor mode only listen-only setup commands are ever sent (SLCAN: C, S0 to S8, M1, O, V or L; gs_usb: reset, bit timing, start with the listen-only flag; ELM327: AT setup and ATMA). No CAN data frame is transmitted. Device filters only change which devices the browser offers.</p>
+  </div>
+  <div class="card warnbox" id="diagCard">
+    <h2>Diagnostics tool (advanced, off by default)</h2>
+    <p class="note" id="diagState">Off. The Diag tab is hidden and nothing can be transmitted.</p>
+    <p class="note">Reads and clears standard OBD-II fault codes on your own vehicle. This is the only part of the app that transmits CAN frames, and only after a warning screen and while you are in Diagnostics mode.</p>
+    <div class="row"><button class="btn" id="bDiagEnable">Enable Diagnostics...</button></div>
   </div>
   <div class="card">
     <h2>Saved data</h2>
     <div class="row"><button class="btn" id="bOnbShow">Show setup guide</button><button class="btn" id="bSigClr">Forget my signal names</button></div>
     <p class="note">Names and decoders live only on this phone, per vehicle profile.</p>
   </div>
-  <div class="card ro"><b>Read-only.</b> Clearing or writing fault codes needs transmitting, which this app cannot do. Use a proper scan tool for that.</div>
+  <div class="card ro"><b>Monitor mode is read-only.</b> It cannot clear or write fault codes. Only the opt-in Diagnostics mode can read and clear standard OBD-II codes; writing, coding and flashing are not implemented at all.</div>
+</section>
+<!-- ========== DIAGNOSTICS ========== -->
+<section class="panel" data-tab="diag" id="tab-diag" role="tabpanel" hidden>
+  <div class="card warnbox">
+    <h2>Diagnostics <span class="tag t-un">standard OBD-II only</span></h2>
+    <p class="note">Sends only standard OBD-II requests (ISO 15765-4 CAN, 11-bit: 0x7DF to all ECUs, 0x7E0 to 0x7E7 to one ECU, replies 0x7E8 to 0x7EF). There is no writing, security access, routine control, flashing or raw-frame sender.</p>
+    <p class="note"><b>Hunter 350 and other motorcycles</b> often use proprietary protocols, so standard OBD may not answer at all (you will see NO DATA). <span id="dgHunter"><b>Diagnostics on the Hunter profile is experimental and unverified.</b></span></p>
+    <p class="note" id="dgElm" hidden>ELM327 adapter: the dongle builds the ISO-TP frames and flow control itself. ELM327 monitoring is limited; it is mainly for this tab.</p>
+  </div>
+  <div class="card">
+    <h2>Adapter mode</h2>
+    <p class="note" id="dgModeTxt">Not connected.</p>
+    <div class="row"><button class="btn pri" id="bDiagStart" disabled>Start Diagnostics mode</button><button class="btn" id="bDiagStop" hidden>Return to Monitor</button></div>
+    <p class="note">Starting takes the adapter out of listen-only (SLCAN M0, gs_usb normal mode, ELM327 CAN auto-formatting). Returning restores listen-only. The app also returns to Monitor after 5 minutes without a request and on disconnect. Vehicle stationary, ignition on, engine off.</p>
+    <div class="note" id="dgMsg" role="status" style="color:var(--warn)"></div>
+  </div>
+  <div class="card">
+    <h2>Vehicle info</h2>
+    <div class="row"><button class="btn sm" id="bPids" disabled>Supported PIDs</button><button class="btn sm" id="bVin" disabled>VIN</button><button class="btn sm" id="bMil" disabled>MIL and monitors</button></div>
+    <div id="dgInfo" class="note"></div>
+  </div>
+  <div class="card">
+    <h2>Live data</h2>
+    <p class="note">RPM, speed, coolant, load, throttle, MAP, intake temperature, fuel level (Mode 01).</p>
+    <div class="row"><button class="btn sm" id="bLiveOnce" disabled>Read once</button><button class="btn sm" id="bLive" disabled>Live polling</button></div>
+    <div class="grid2" id="dgLive"></div>
+  </div>
+  <div class="card">
+    <h2>Fault codes</h2>
+    <div class="row"><button class="btn sm" id="bDtc3" disabled>Read stored (03)</button><button class="btn sm" id="bDtc7" disabled>Pending (07)</button><button class="btn sm" id="bDtc0A" disabled>Permanent (0A)</button></div>
+    <h3>Stored</h3><div id="dgDtc3"></div>
+    <h3>Pending</h3><div id="dgDtc7"></div>
+    <h3>Permanent</h3><div id="dgDtc0A"></div>
+    <p class="note">Descriptions are generic SAE wording for common P0xxx codes and may differ by manufacturer. Unknown codes are shown raw.</p>
+    <div class="row"><button class="btn" id="bClearOpen" disabled>Clear codes...</button></div>
+    <div id="clearBox" class="warnbox card" hidden>
+      <h3>Clear fault codes (Mode 04)</h3>
+      <p class="note" id="clearWhat"></p>
+      <label class="f">Type CLEAR to confirm<input id="clearInp" autocapitalize="characters" autocomplete="off" spellcheck="false"></label>
+      <div class="row"><button class="btn pri" id="bClearGo" disabled>Erase codes</button><button class="btn" id="bClearCancel">Cancel</button></div>
+    </div>
+    <div id="clearRes" class="note" hidden></div>
+  </div>
+  <div class="card">
+    <h2>Transmit log</h2>
+    <p class="note" id="dgTxCount"></p>
+    <p class="note" id="dgRec"></p>
+    <div class="row"><button class="btn sm" id="bDiagRec">Start recording</button></div>
+    <div id="dgTx" style="font:11px var(--mono);color:var(--mut);max-height:200px;overflow:auto;white-space:pre-wrap;background:rgba(3,8,16,.7);border-radius:10px;padding:8px"></div>
+  </div>
 </section>
 </main>
 
@@ -350,21 +429,41 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
   <button role="tab" data-t="record" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>Record</button>
   <button role="tab" data-t="identify" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Identify</button>
   <button role="tab" data-t="health" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Health</button>
+  <button role="tab" data-t="diag" id="tabDiag" aria-selected="false" hidden><svg viewBox="0 0 24 24"><path d="M4 8h16l-2 8H6z"/><path d="M9 12h.01M12 12h.01M15 12h.01"/></svg>Diag</button>
   <button role="tab" data-t="settings" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Settings</button>
 </nav>
+<div class="modal" id="diagWarn" role="dialog" aria-modal="true" aria-labelledby="dwT" hidden>
+  <div class="card warnbox">
+    <h2 id="dwT">Before you enable Diagnostics</h2>
+    <ul>
+      <li>Use it only on <b>your own vehicle</b>. You are responsible for what you do with it.</li>
+      <li>Vehicle <b>stationary</b>, parked safely, <b>ignition on, engine off</b>, battery healthy (a weak battery can corrupt ECU operations).</li>
+      <li>This mode <b>transmits on the CAN bus</b>. Only standard OBD-II requests are sent, and the adapter leaves listen-only while it is active.</li>
+      <li><b>Clearing codes</b> resets the readiness monitors, erases freeze-frame data and can hide a real emissions or safety fault. A car may fail an inspection until its monitors complete again.</li>
+      <li><b>Hunter 350 and other motorcycles</b> often use proprietary protocols, so standard OBD may not respond. Diagnostics there is experimental and unverified.</li>
+    </ul>
+    <label class="chk"><input type="checkbox" id="diagAck"> I have read this and accept responsibility.</label>
+    <div class="row"><button class="btn pri" id="bWarnOk" disabled>Enable Diagnostics</button><button class="btn" id="bWarnCancel">Cancel</button></div>
+  </div>
+</div>
 <div id="toast" role="status" hidden></div>
 
 <script id="app">
 "use strict";
-const APP="hunter-can-live",APPV=2;
+const APP="hunter-can-live",APPV=3;
 const VID=0x16D0,PID=0x117E;
 // ---------- safety: adapter command allow-list ----------
-// Only C, S0..S8, M1, O, V. A 't'/'T' data frame, S9+, M0, etc. are rejected. Never CAN data.
+// MODE "monitor" (default): only C, S0..S8, M1, O, V (USBtin style: C, S, L, V). A 't'/'T' data frame, S9+, M0, etc. are rejected. Never CAN data.
+// MODE "diag" (opt-in, see Diagnostics): the same plus M0 (normal mode); data frames still never go through tx().
+let MODE="monitor";
 const SCODE={10:0,20:1,50:2,100:3,125:4,250:5,500:6,750:7,1000:8};
-const CMD_RE=/^(?:C|M1|O|V|S[0-8])$/;
-function cmdAllowed(c){return typeof c==="string"&&CMD_RE.test(c);}
+const CMD_RE=/^(?:C|M1|O|V|S[0-8])$/;       // monitor, M1 style (CANable, CANtact)
+const CMD_RE_L=/^(?:C|L|V|S[0-8])$/;        // monitor, L style (USBtin): L opens listen-only, plain O is NOT allowed
+const CMD_RE_D=/^(?:C|M0|O|V|S[0-8])$/;     // diagnostics, M style
+const CMD_RE_DL=/^(?:C|O|V|S[0-8])$/;       // diagnostics, L style
+function cmdAllowed(c){if(typeof c!=="string")return false;const L=AD.style==="L";return (MODE==="diag"?(L?CMD_RE_DL:CMD_RE_D):(L?CMD_RE_L:CMD_RE)).test(c);}
 const ALLOWED={has:cmdAllowed};
-const CFG={detectMs:1500,prepMs:2500,cmdMs:150,settleMs:150};
+const CFG={detectMs:1500,prepMs:2500,cmdMs:150,settleMs:150,elmMs:1500,elmReset:3000,elmReq:5000};
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const nowMs=()=>performance.now();
@@ -443,7 +542,7 @@ const OBDP={
 function obdFrame(id,d,now){
   // single-frame ISO-TP responses only: [len, 0x41, pid, A, B...]
   if(d.length>=3&&d[0]>=2&&d[0]<=7){
-    if(d[1]===0x41){const def=OBDP[d[2]];if(def&&d.length>=3+def.l&&d[0]>=2+def.l){OBD.set(d[2],{v:def.f(d[3],d[4]||0),t:now,def,ecu:id});}}
+    if(d[1]===0x41){const def=OBDP[d[2]];if(def&&d.length>=3+def.l&&d[0]>=2+def.l){const v=def.f(d[3],d[4]||0);OBD.set(d[2],{v,t:now,def,ecu:id});if(d[2]===0x0C)noteRpm(v,now);}}
     else if(d[1]===0x43)H.dtcResp++; // another tool is reading stored codes; only counted, not decoded
   }
 }
@@ -507,6 +606,7 @@ function mkStats(key,now){
 function onFrame(id,ext,data){
   const now=nowMs();
   FR.total++;
+  if(MODE==="diag"&&!ext&&id>=0x7E8&&id<=0x7EF)diagOnFrame(id,data,now);   // diagnostics replies are never hidden by the ID-format filter
   if((curFmt()==="11"&&ext)||(curFmt()==="29"&&!ext)){H.filtered++;return;}
   const key=keyOf(id,ext);
   let s=ids.get(key);
@@ -522,6 +622,7 @@ function onFrame(id,ext,data){
   const kn=prof().known;
   if(kn&&!kn.includes(key)&&!SIG["id:"+key]){H.unknown.set(key,(H.unknown.get(key)||0)+1);}
   if(kn&&data.length<8&&kn.includes(key))H.dlcOdd++;
+  if(isHunter()&&key===0x100&&data.length>5)noteRpm(data[4]<<8|data[5],now);
   if(isHunter()&&key===0x140&&data.length>=4){const v=data[1]<<16|data[2]<<8|data[3];if(s.ctr!=null){const dv=(v-s.ctr)&0xFFFFFF;if(dv>8)H.ctrJump++;}s.ctr=v;}
   for(let i=0;i<data.length;i++)s.hist[i][data[i]]++;
   if(s.last){const m=Math.min(s.last.length,data.length);for(let i=0;i<m;i++){const x=s.last[i]^data[i];if(x){s.ch[i]=now;s.cnt[i]++;for(let b=0;b<8;b++)if(x>>b&1)s.tog[i*8+b]++;}}}
@@ -532,7 +633,7 @@ function onFrame(id,ext,data){
     else if(id===0x7DF||(id>=0x7E0&&id<=0x7E7))H.obdReq++;
   }
   const ds=DECBY.get(key);
-  if(ds)for(const d of ds){const v=decodeSignal(d,data);if(v!=null){let u=UV.get(d.uid);if(!u){u={lo:v,hi:v};UV.set(d.uid,u);}u.v=v;u.t=now;if(v<u.lo)u.lo=v;if(v>u.hi)u.hi=v;}}
+  if(ds)for(const d of ds){const v=decodeSignal(d,data);if(v!=null){if(d.unit.toLowerCase()==="rpm")noteRpm(v,now);let u=UV.get(d.uid);if(!u){u={lo:v,hi:v};UV.set(d.uid,u);}u.v=v;u.t=now;if(v<u.lo)u.lo=v;if(v>u.hi)u.hi=v;}}
   if(twin)twin.push([key,data]);
   if(rec)rec.lines.push(((now-rec.start)/1000).toFixed(4)+" "+capId(key)+" "+data.length+" "+[...data].map(hex2).join(" "));
 }
@@ -556,6 +657,7 @@ function feed(text){
     if(!seg.length)continue;
     let f=parseSeg(seg);
     if(f){onFrame(f.id,f.ext,f.data);continue;}
+    if(/^[zZ]$/.test(seg))continue;                                   // adapter acknowledges a transmitted frame (Diagnostics mode)
     if(/^[rR][0-9A-F]{3,8}[0-8]$/.test(seg)){H.rtr++;continue;}      // remote frames: counted, ignored
     if(/^[Vv][0-9A-Za-z]*$/.test(seg)||/^N[0-9A-Za-z]*$/.test(seg))continue; // adapter replies
     // resync: junk glued to a frame, or two frames glued together
@@ -566,68 +668,369 @@ function feed(text){
   if(buf.length>4096){buf="";H.overflow++;}
 }
 
-// ---------- transport ----------
-let lastKind=null,userDisc=false,reconnecting=false;
+// ---------- adapter settings ----------
+const BAUDS=[9600,19200,38400,57600,115200,230400,460800,921600,2000000];
+const FILTERS={any:{label:"Any device (no filter)"},canable:{label:"CANable slcan 16D0:117E",vid:0x16D0,pid:0x117E},candle:{label:"candleLight / gs_usb 1D50:606F",vid:0x1D50,pid:0x606F},usbtin:{label:"USBtin 04D8:000A",vid:0x04D8,pid:0x000A},custom:{label:"Custom VID:PID"}};
+const ADAPTERS=[
+  {id:"slcan-serial",label:"SLCAN, Web Serial (CANable, USBtin, CANtact, any SLCAN)",need:"serial",proto:"slcan",pipe:"serial"},
+  {id:"slcan-usb",label:"SLCAN, WebUSB CDC (any SLCAN)",need:"usb",proto:"slcan",pipe:"usbcdc"},
+  {id:"gsusb",label:"candleLight / gs_usb, WebUSB (UNTESTED on hardware)",need:"usb",proto:"gsusb",pipe:"gsusb"},
+  {id:"elm-serial",label:"ELM327, Web Serial (diagnostics; monitoring limited)",need:"serial",proto:"elm",pipe:"serial"},
+  {id:"elm-ble",label:"ELM327, Web Bluetooth BLE (diagnostics; monitoring limited)",need:"ble",proto:"elm",pipe:"ble"},
+  {id:"ws",label:"WebSocket bridge (SLCAN text, ws:// or wss://)",need:"ws",proto:"slcan",pipe:"ws"},
+  {id:"ble-slcan",label:"BLE-UART bridge (SLCAN text)",need:"ble",proto:"slcan",pipe:"ble"}
+];
+let AD=Object.assign({type:"",baud:115200,filter:"any",vid:"",pid:"",style:"M",wsUrl:""},lsGet("hcl.adapter",{}));
+const saveAd=()=>lsSet("hcl.adapter",AD);
+function adAvail(){const n=(typeof navigator!=="undefined"&&navigator)||{};return {serial:"serial" in n,usb:"usb" in n,ble:"bluetooth" in n,ws:typeof WebSocket==="function"};}
+function adList(){const a=adAvail();return ADAPTERS.filter(x=>a[x.need]);}
+function adCur(){const l=adList();return l.find(x=>x.id===AD.type)||l[0]||null;}
+function adFilter(){
+  if(AD.filter==="custom"){const v=parseInt(AD.vid,16),p=parseInt(AD.pid,16);return (isFinite(v)&&v>0)?{vid:v,pid:isFinite(p)?p:null}:null;}
+  const f=FILTERS[AD.filter];return f&&f.vid!=null?{vid:f.vid,pid:f.pid}:null;
+}
+function serialOpts(){const f=adFilter();return f?{filters:[f.pid!=null?{usbVendorId:f.vid,usbProductId:f.pid}:{usbVendorId:f.vid}]}:{};}
+function usbFilters(def){const f=adFilter();return f?[f.pid!=null?{vendorId:f.vid,productId:f.pid}:{vendorId:f.vid}]:(def||[]);}
+const BLE_SVC=[0xFFE0,0xFFF0,"6e400001-b5a0-f393-e0a9-e50e24dcca9e","e7810a71-73ae-499d-8c15-faa9aef0c3f2"];
+
+// ---------- byte pipes: how bytes reach the adapter. No protocol logic. ----------
+// A pipe has write(text), close(), start(onText,onClose), info.
+async function pipeSerial(port){
+  await port.open({baudRate:AD.baud||115200});
+  const writer=port.writable.getWriter();const enc=new TextEncoder();let alive=true;
+  return {kind:"serial",info:(port.getInfo&&port.getInfo())||{},
+    write:s=>writer.write(enc.encode(s)),
+    close:async()=>{alive=false;try{writer.releaseLock();}catch(e){}try{await port.close();}catch(e){}},
+    start(onText,onClose){(async()=>{
+      const dec=new TextDecoder();
+      while(alive&&port.readable){
+        const reader=port.readable.getReader();
+        try{for(;;){const {value,done}=await reader.read();if(done)break;onText(dec.decode(value,{stream:true}));}}
+        catch(e){if(alive)log("read: "+e.message);}
+        finally{try{reader.releaseLock();}catch(e){}}
+        break;
+      }
+      if(alive){alive=false;try{await port.close();}catch(e){}onClose();}
+    })();}};
+}
+async function pipeUsbCdc(dev){
+  await dev.open();
+  if(dev.configuration===null)await dev.selectConfiguration(1);
+  let ctl=0,dat=1,epIn=1,epOut=1;
+  const ifs=(dev.configuration&&dev.configuration.interfaces)||[];let foundCtl=false,foundDat=false;
+  for(const i of ifs){
+    const a=i.alternates&&i.alternates[0];if(!a)continue;
+    if(a.interfaceClass===0x02&&!foundCtl){ctl=i.interfaceNumber;foundCtl=true;}
+    const eps=a.endpoints||[];const bi=eps.find(e=>e.type==="bulk"&&e.direction==="in"),bo=eps.find(e=>e.type==="bulk"&&e.direction==="out");
+    if(bi&&bo&&(a.interfaceClass===0x0A||!foundDat)){dat=i.interfaceNumber;epIn=bi.endpointNumber;epOut=bo.endpointNumber;foundDat=true;}
+  }
+  for(const n of new Set([ctl,dat])){try{await dev.claimInterface(n);}catch(e){log("claim "+n+": "+e.message);}}
+  try{const b=new Uint8Array(7);new DataView(b.buffer).setUint32(0,AD.baud||115200,true);b[6]=8;await dev.controlTransferOut({requestType:"class",recipient:"interface",request:0x20,value:0,index:ctl},b);}catch(e){}
+  try{await dev.controlTransferOut({requestType:"class",recipient:"interface",request:0x22,value:0x01,index:ctl});}catch(e){log("DTR: "+e.message);}
+  const enc=new TextEncoder(),dec=new TextDecoder();let alive=true;
+  return {kind:"usbcdc",info:{usbVendorId:dev.vendorId,usbProductId:dev.productId},
+    write:s=>dev.transferOut(epOut,enc.encode(s)),
+    close:async()=>{alive=false;try{await dev.close();}catch(e){}},
+    start(onText,onClose){(async()=>{
+      while(alive){
+        try{const r=await dev.transferIn(epIn,64);if(r.status==="ok"&&r.data)onText(dec.decode(r.data,{stream:true}));}
+        catch(e){if(alive)log("read: "+e.message);break;}
+      }
+      if(alive){alive=false;try{await dev.close();}catch(e){}onClose();}
+    })();}};
+}
+async function pipeBle(dev){
+  const server=await dev.gatt.connect();
+  let rx=null,wr=null;
+  for(const s of await server.getPrimaryServices()){
+    const chs=await s.getCharacteristics();
+    const n=chs.find(c=>c.properties.notify||c.properties.indicate),w=chs.find(c=>c.properties.write||c.properties.writeWithoutResponse);
+    if(n&&w){rx=n;wr=w;break;}
+  }
+  if(!rx)throw new Error("No BLE UART service found (tried FFE0, FFF0, Nordic UART, 18F0).");
+  const enc=new TextEncoder(),dec=new TextDecoder();let alive=true,chain=Promise.resolve(),cbText=null,cbClose=null;
+  const writeChunk=b=>(wr.properties.writeWithoutResponse&&wr.writeValueWithoutResponse)?wr.writeValueWithoutResponse(b):wr.writeValue(b);
+  dev.addEventListener&&dev.addEventListener("gattserverdisconnected",()=>{if(alive){alive=false;cbClose&&cbClose();}});
+  return {kind:"ble",info:{},
+    write(s){const b=enc.encode(s);chain=chain.then(async()=>{for(let i=0;i<b.length;i+=20)await writeChunk(b.slice(i,i+20));});return chain;},
+    close:async()=>{alive=false;try{await rx.stopNotifications();}catch(e){}try{dev.gatt.disconnect();}catch(e){}},
+    async start(onText,onClose){cbText=onText;cbClose=onClose;
+      rx.addEventListener("characteristicvaluechanged",ev=>{const v=ev.target.value;onText(dec.decode(new Uint8Array(v.buffer,v.byteOffset,v.byteLength),{stream:true}));});
+      await rx.startNotifications();}};
+}
+function pipeWs(url){
+  return new Promise((res,rej)=>{
+    if(!/^wss?:\/\/[^\s]+$/i.test(String(url||"")))return rej(new Error("WebSocket URL must start with ws:// or wss://"));
+    let ws;try{ws=new WebSocket(url);}catch(e){return rej(e);}
+    ws.binaryType="arraybuffer";let alive=true,cbText=null,cbClose=null;const dec=new TextDecoder();
+    const tm=setTimeout(()=>{if(alive){alive=false;try{ws.close();}catch(e){}rej(new Error("WebSocket connect timeout"));}},8000);
+    ws.onopen=()=>{clearTimeout(tm);res({kind:"ws",info:{},write:async s=>{ws.send(s);},close:async()=>{alive=false;try{ws.close();}catch(e){}},
+      start(onText,onClose){cbText=onText;cbClose=onClose;}});};
+    ws.onmessage=ev=>{if(!cbText)return;cbText(typeof ev.data==="string"?ev.data:dec.decode(ev.data,{stream:true}));};
+    ws.onerror=()=>{clearTimeout(tm);if(!cbText&&alive){alive=false;rej(new Error("WebSocket error"));}};
+    ws.onclose=()=>{clearTimeout(tm);if(alive&&cbClose){alive=false;cbClose();}};
+  });
+}
+
+// ---------- common transport interface ----------
+// open() close() write(text) onFrame(id,ext,data) bitrate listenOnly txEnabled
+// configure({bitrate,listenOnly}) stop() sendFrame(id,ext,data) sendRequest(id,payload)
+// txEnabled stays false until Diagnostics mode turns it on. sendFrame/sendRequest refuse unless txEnabled && !listenOnly.
+class Transport{
+  constructor(kind,pipe){this.kind=kind;this.pipe=pipe||null;this.bitrate=500;this.listenOnly=true;this.txEnabled=false;
+    this.onFrame=null;this.onClose=null;this.onStatus=null;this.caps={isotp:false};this.closed=false;this.info=(pipe&&pipe.info)||{};}
+  async open(){}
+  async close(){this.closed=true;if(this.pipe)await this.pipe.close();}
+  async stop(){}
+  write(s){if(!this.pipe)throw new Error("this adapter has no text channel");return this.pipe.write(s);}
+  async configure(){throw new Error("configure not implemented");}
+  txGuard(){if(!this.txEnabled||this.listenOnly)throw new Error("transmit refused: adapter is in listen-only mode");}
+  async sendFrame(){throw new Error("raw frames are not supported by this adapter");}
+  async sendRequest(){throw new Error("requests are not supported by this adapter");}
+}
+
+// --- SLCAN (Lawicel text). CANable, USBtin, CANtact, ESP32/Pi bridges ---
+class SlcanTransport extends Transport{
+  constructor(pipe){super("slcan",pipe);}
+  async open(){await this.pipe.start(t=>feed(t),()=>{if(!this.closed&&this.onClose)this.onClose();});}
+  async stop(){await tx("C");}
+  async configure(o){
+    const sc=SCODE[o.bitrate];if(sc===undefined)throw new Error("unsupported bitrate "+o.bitrate);
+    this.txEnabled=false;if(o.listenOnly)this.listenOnly=true;
+    const seq=AD.style==="L"?(o.listenOnly?["C","S"+sc,"L"]:["C","S"+sc,"O"]):["C","S"+sc,o.listenOnly?"M1":"M0","O"];
+    for(const c of seq){await tx(c);await sleep(CFG.cmdMs);}
+    this.listenOnly=!!o.listenOnly;this.bitrate=o.bitrate;
+  }
+  async sendFrame(id,ext,data){
+    this.txGuard();
+    if(ext||!Number.isInteger(id)||id<0||id>0x7FF||!data||data.length>8)throw new Error("bad frame");
+    return this.write("t"+id.toString(16).toUpperCase().padStart(3,"0")+data.length+Array.from(data).map(hex2).join("")+"\r");
+  }
+}
+
+// --- candleLight / gs_usb over WebUSB. NOT TESTED ON HARDWARE. ---
+const GS={HOST_FORMAT:0,BITTIMING:1,MODE:2,BT_CONST:4,DEVICE_CONFIG:5,MODE_RESET:0,MODE_START:1,FLAG_LISTEN_ONLY:1,FEAT_LISTEN_ONLY:1,ECHO_NONE:0xFFFFFFFF,EFF:0x80000000,RTR:0x40000000,ERR:0x20000000,FRAME:20};
+function gsU32(vals){const b=new Uint8Array(vals.length*4),v=new DataView(b.buffer);vals.forEach((x,i)=>v.setUint32(i*4,x>>>0,true));return b;}
+const gsHostFormat=()=>gsU32([0x0000BEEF]);
+const gsBitTimingBytes=t=>gsU32([t.prop_seg,t.phase_seg1,t.phase_seg2,t.sjw,t.brp]);
+const gsModeBytes=(mode,flags)=>gsU32([mode,flags]);
+function gsParseDeviceConfig(dv){return {icount:dv.getUint8(3),swVersion:dv.getUint32(4,true),hwVersion:dv.getUint32(8,true)};}
+function gsParseBtConst(dv){const g=i=>dv.getUint32(i*4,true);return {feature:g(0),fclk:g(1),tseg1Min:g(2),tseg1Max:g(3),tseg2Min:g(4),tseg2Max:g(5),sjwMax:g(6),brpMin:g(7),brpMax:g(8),brpInc:g(9)};}
+// Exact integer bit timing only: sample point ~87.5% (75% above 500 kbps), SJW 1. Returns null when fclk cannot make the bitrate exactly.
+function gsCalcTiming(fclk,kbps,lim){
+  lim=Object.assign({tseg1Min:1,tseg1Max:16,tseg2Min:1,tseg2Max:8,sjwMax:4,brpMin:1,brpMax:1024,brpInc:1},lim||{});
+  const bps=kbps*1000,target=kbps>500?0.75:0.875,inc=lim.brpInc||1;let best=null;
+  for(let n=25;n>=8;n--){
+    if(fclk%(bps*n))continue;const brp=fclk/(bps*n);
+    if(brp<lim.brpMin||brp>lim.brpMax||(brp-lim.brpMin)%inc)continue;
+    for(let t1=lim.tseg1Min;t1<=lim.tseg1Max;t1++){
+      const t2=n-1-t1;if(t2<lim.tseg2Min||t2>lim.tseg2Max)continue;
+      const err=Math.abs((1+t1)/n-target);
+      if(!best||err<best.err-1e-9||(Math.abs(err-best.err)<=1e-9&&n>best.n)){const prop=t1>>1;best={err,n,prop_seg:prop,phase_seg1:t1-prop,phase_seg2:t2,sjw:Math.min(1,lim.sjwMax),brp};}
+    }
+  }
+  if(!best)return null;return {prop_seg:best.prop_seg,phase_seg1:best.phase_seg1,phase_seg2:best.phase_seg2,sjw:best.sjw,brp:best.brp,tq:best.n,sample:(1+best.prop_seg+best.phase_seg1)/best.n};
+}
+function gsEncodeFrame(id,ext,data,echo){
+  const b=new Uint8Array(GS.FRAME),v=new DataView(b.buffer);
+  v.setUint32(0,echo>>>0,true);v.setUint32(4,((ext?(id&0x1FFFFFFF)|GS.EFF:id&0x7FF)>>>0),true);b[8]=data.length;b[9]=0;b[10]=0;b[11]=0;
+  for(let i=0;i<data.length&&i<8;i++)b[12+i]=data[i];return b;
+}
+function gsDecodeFrame(u){
+  const v=new DataView(u.buffer,u.byteOffset,u.byteLength);const echo=v.getUint32(0,true),cid=v.getUint32(4,true),dlc=Math.min(8,u[8]);
+  const ext=!!(cid&GS.EFF);return {echo,ext,rtr:!!(cid&GS.RTR),err:!!(cid&GS.ERR),id:ext?(cid&0x1FFFFFFF):(cid&0x7FF),dlc,flags:u[10],channel:u[9],data:u.slice(12,12+dlc)};
+}
+class GsUsbTransport extends Transport{
+  constructor(dev){super("gsusb",null);this.dev=dev;this.ifn=0;this.epIn=1;this.epOut=2;this.echo=0;this.bt=null;this.alive=false;this.txAcks=0;this.info={usbVendorId:dev.vendorId,usbProductId:dev.productId};}
+  async ctlOut(req,value,data){const r=await this.dev.controlTransferOut({requestType:"vendor",recipient:"interface",request:req,value,index:this.ifn},data);if(r&&r.status&&r.status!=="ok")throw new Error("gs_usb request "+req+" failed: "+r.status);return r;}
+  async ctlIn(req,value,len){const r=await this.dev.controlTransferIn({requestType:"vendor",recipient:"interface",request:req,value,index:this.ifn},len);if(!r||r.status!=="ok"||!r.data)throw new Error("gs_usb request "+req+" failed");return r.data;}
+  async open(){
+    const d=this.dev;await d.open();if(d.configuration===null)await d.selectConfiguration(1);
+    for(const i of (d.configuration&&d.configuration.interfaces)||[]){
+      const a=i.alternates&&i.alternates[0];if(!a||a.interfaceClass!==0xFF)continue;
+      const eps=a.endpoints||[];const bi=eps.find(e=>e.type==="bulk"&&e.direction==="in"),bo=eps.find(e=>e.type==="bulk"&&e.direction==="out");
+      if(bi&&bo){this.ifn=i.interfaceNumber;this.epIn=bi.endpointNumber;this.epOut=bo.endpointNumber;break;}
+    }
+    await d.claimInterface(this.ifn);
+    await this.ctlOut(GS.HOST_FORMAT,1,gsHostFormat());
+    this.devCfg=gsParseDeviceConfig(await this.ctlIn(GS.DEVICE_CONFIG,1,12));
+    this.bt=gsParseBtConst(await this.ctlIn(GS.BT_CONST,0,40));
+    this.alive=true;this.readLoop();
+  }
+  async readLoop(){
+    while(this.alive){
+      try{const r=await this.dev.transferIn(this.epIn,64);if(!this.alive)break;if(r.status==="ok"&&r.data)this.rx(r.data);else if(r.status==="stall"){try{await this.dev.clearHalt("in",this.epIn);}catch(e){}}}
+      catch(e){if(this.alive){log("read: "+e.message);this.alive=false;if(!this.closed&&this.onClose)this.onClose();}break;}
+    }
+  }
+  rx(dv){const u=new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength);for(let o=0;o+GS.FRAME<=u.length;o+=GS.FRAME)this.dispatch(gsDecodeFrame(u.subarray(o,o+GS.FRAME)));}
+  dispatch(f){
+    if(f.err||(f.flags&1)){H.bel++;return;}               // error frame / controller overflow: same role as the SLCAN error beep
+    if(f.echo!==GS.ECHO_NONE){this.txAcks++;return;}      // echo of a frame WE sent: not bus traffic
+    if(f.rtr){H.rtr++;return;}
+    if(this.onFrame)this.onFrame(f.id,f.ext,f.data);
+  }
+  write(){throw new Error("gs_usb has no text channel");}
+  async stop(){try{await this.ctlOut(GS.MODE,0,gsModeBytes(GS.MODE_RESET,0));}catch(e){}}
+  async close(){this.closed=true;this.alive=false;try{await this.dev.releaseInterface(this.ifn);}catch(e){}try{await this.dev.close();}catch(e){}}
+  async configure(o){
+    this.txEnabled=false;if(o.listenOnly)this.listenOnly=true;
+    if(o.listenOnly&&!(this.bt.feature&GS.FEAT_LISTEN_ONLY))throw new Error("This firmware does not report listen-only support. Refusing to open the bus in Monitor mode.");
+    const t=gsCalcTiming(this.bt.fclk,o.bitrate,this.bt);
+    if(!t)throw new Error("No exact bit timing for "+o.bitrate+" kbps at "+(this.bt.fclk/1e6)+" MHz.");
+    await this.ctlOut(GS.MODE,0,gsModeBytes(GS.MODE_RESET,0));
+    await this.ctlOut(GS.BITTIMING,0,gsBitTimingBytes(t));
+    await this.ctlOut(GS.MODE,0,gsModeBytes(GS.MODE_START,o.listenOnly?GS.FLAG_LISTEN_ONLY:0));
+    this.listenOnly=!!o.listenOnly;this.bitrate=o.bitrate;this.timing=t;
+  }
+  async sendFrame(id,ext,data){
+    this.txGuard();if(!data||data.length>8)throw new Error("bad frame");
+    this.echo=(this.echo+1)&0xFFFF;
+    return this.dev.transferOut(this.epOut,gsEncodeFrame(id,ext,data,this.echo));
+  }
+}
+
+// --- ELM327 (AT text protocol). Monitoring via ATMA is limited; the real use is Diagnostics. ---
+const ELM_BASE=/^(?:ATZ|ATE0|ATL0|ATS1|ATH1|ATSP[6-9]|ATCAF0|ATCSM1|ATMA)$/;   // Monitor mode: init and monitor-all only
+const ELM_DIAG=/^(?:ATCAF1|ATSH(?:7DF|7E[0-7]))$/;
+function elmCmdAllowed(c){
+  if(typeof c!=="string")return false;
+  if(ELM_BASE.test(c))return true;
+  if(MODE!=="diag")return false;
+  if(ELM_DIAG.test(c))return true;
+  if(/^(?:[0-9A-F]{2}){1,2}$/.test(c))return obdPayloadOk(c.match(/../g).map(h=>parseInt(h,16)));   // OBD-II request payload (ELM adds ISO-TP framing)
+  return false;
+}
+function elmProto(kbps,fmt){
+  const ext=fmt==="29";
+  if(kbps===500)return ext?"7":"6";if(kbps===250)return ext?"9":"8";
+  throw new Error("ELM327 supports 250 and 500 kbps only (ISO 15765-4).");
+}
+// One line of ELM output -> {t:'frame',id,ext,data} | {t:'nodata'|'searching'|'ok'|'unknown'|'stopped'|'error'|'info'|'empty'}
+function elmParseLine(line,ext){
+  const s=String(line).replace(/[\x00>]/g,"").trim().toUpperCase();
+  if(!s)return {t:"empty"};
+  if(s==="OK")return {t:"ok"};
+  if(/^SEARCHING/.test(s))return {t:"searching"};
+  if(s==="NO DATA")return {t:"nodata"};
+  if(s==="STOPPED")return {t:"stopped"};
+  if(s==="?")return {t:"unknown"};
+  if(/^BUS INIT:\s*OK/.test(s))return {t:"info",text:s};
+  if(/UNABLE TO CONNECT|BUS INIT|BUS BUSY|CAN ERROR|BUFFER FULL|DATA ERROR|FB ERROR|BUS ERROR|LV RESET|ACT ALERT|RX ERROR|ERR\d\d/.test(s))return {t:"error",text:s};
+  const tk=s.split(/\s+/);
+  if(/^[0-9A-F]{3}$/.test(tk[0])&&tk.length>=2&&tk.length<=9&&tk.slice(1).every(x=>/^[0-9A-F]{2}$/.test(x)))
+    return {t:"frame",id:parseInt(tk[0],16),ext:false,data:Uint8Array.from(tk.slice(1).map(x=>parseInt(x,16)))};
+  if(/^[0-9A-F]{8}$/.test(tk[0])&&tk.length>=1&&tk.length<=9&&tk.slice(1).every(x=>/^[0-9A-F]{2}$/.test(x)))
+    return {t:"frame",id:parseInt(tk[0],16)&0x1FFFFFFF,ext:true,data:Uint8Array.from(tk.slice(1).map(x=>parseInt(x,16)))};
+  if(ext&&tk.length>=5&&tk.length<=12&&tk.every(x=>/^[0-9A-F]{2}$/.test(x))){
+    const b=tk.map(x=>parseInt(x,16));return {t:"frame",id:(((b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3])&0x1FFFFFFF)>>>0,ext:true,data:Uint8Array.from(b.slice(4))};
+  }
+  if(/^ELM\d|^ATZ|^AT[A-Z0-9 ]*$|^V\d|ELM327|OBDII|VLINKER|OBDLINK/.test(s))return {t:"info",text:s};
+  return {t:"unknown",text:s};
+}
+class ElmTransport extends Transport{
+  constructor(pipe){super("elm",pipe);this.caps={isotp:true};this.buf="";this.waiter=null;this.q=Promise.resolve();this.inited=false;this.monitoring=false;this.ext=false;this.sh=null;this.proto=null;this.stat={nodata:0,searching:0,errors:0,unknown:0};}
+  async open(){await this.pipe.start(t=>this.onText(t),()=>{if(!this.closed&&this.onClose)this.onClose();});}
+  onText(t){
+    this.buf+=t;let m;
+    while((m=/[\r\n>]/.exec(this.buf))){
+      const ch=m[0],line=this.buf.slice(0,m.index);this.buf=this.buf.slice(m.index+1);
+      if(line.trim())this.line(line);
+      if(ch===">"&&this.waiter)this.waiter(true);
+    }
+    if(this.buf.length>512)this.buf="";
+  }
+  line(l){
+    const r=elmParseLine(l,this.ext);
+    if(r.t==="frame"){if(this.onFrame)this.onFrame(r.id,r.ext,r.data);return;}
+    if(r.t==="nodata")this.stat.nodata++;else if(r.t==="searching")this.stat.searching++;
+    else if(r.t==="error"){this.stat.errors++;H.bel++;}else if(r.t==="unknown")this.stat.unknown++;
+    if(this.onStatus)this.onStatus(r);
+  }
+  send(raw,ms){
+    const run=()=>new Promise(res=>{
+      let done=false;const fin=ok=>{if(done)return;done=true;clearTimeout(tm);if(this.waiter===fin)this.waiter=null;res(ok);};
+      const tm=setTimeout(()=>fin(false),ms||CFG.elmMs);this.waiter=fin;
+      Promise.resolve(this.pipe.write(raw)).catch(()=>fin(false));
+    });
+    const p=this.q.then(run,run);this.q=p.catch(()=>{});return p;
+  }
+  async cmd(c,ms,optional){
+    if(!elmCmdAllowed(c))throw new Error("blocked command "+JSON.stringify(c));
+    const ok=await this.send(c+"\r",ms);
+    if(!ok&&!optional)throw new Error("ELM327 did not answer "+c+" (no prompt). Check baud rate and adapter.");
+    return ok;
+  }
+  async startMonitor(){if(!elmCmdAllowed("ATMA"))throw new Error("blocked");this.monitoring=true;this.pipe.write("ATMA\r");}
+  async stopMonitor(){
+    if(!this.monitoring)return;this.monitoring=false;
+    await this.send(" ",CFG.elmMs);           // any character stops ATMA; sent ONLY while monitoring (a bare CR would repeat the last command)
+  }
+  async stop(){await this.stopMonitor();}
+  async configure(o){
+    this.txEnabled=false;if(o.listenOnly)this.listenOnly=true;
+    const d=elmProto(o.bitrate,curFmt());
+    await this.stopMonitor();
+    if(!this.inited){for(const c of ["ATZ","ATE0","ATL0","ATS1","ATH1","ATSP6"])await this.cmd(c,c==="ATZ"?CFG.elmReset:CFG.elmMs);this.inited=true;this.proto="6";}
+    if(d!==this.proto){await this.cmd("ATSP"+d);this.proto=d;}
+    this.ext=d==="7"||d==="9";this.sh=null;
+    if(o.listenOnly){await this.cmd("ATCAF0");await this.cmd("ATCSM1",CFG.elmMs,true);await this.startMonitor();}
+    else{await this.cmd("ATCAF1");await this.cmd("ATH1");}
+    this.listenOnly=!!o.listenOnly;this.bitrate=o.bitrate;
+  }
+  // payload = OBD-II service bytes, no ISO-TP framing (the ELM327 adds it, and answers flow-control itself)
+  async sendRequest(id,payload){
+    this.txGuard();
+    if(this.monitoring)throw new Error("monitor still running");
+    if(this.sh!==id){await this.cmd("ATSH"+id.toString(16).toUpperCase().padStart(3,"0"));this.sh=id;}
+    return this.cmd(Array.from(payload).map(hex2).join(""),CFG.elmReq);
+  }
+}
+
+// ---------- connect / reconnect ----------
+let lastKind=null,lastInfo=null,lastBle=null,userDisc=false,reconnecting=false;
 function mkEvent(t){if(rec)rec.lines.push("# "+t+" "+((nowMs()-rec.start)/1000).toFixed(3));}
 function handleDrop(){
   if(userDisc||!link)return;
-  link=null;buf="";setConn(false);
+  link.txEnabled=false;link=null;buf="";setConn(false);
   mkEvent("DISCONNECT");log("Link lost. Will keep trying to reconnect.");
   startReconnect();
 }
-async function connectSerial(port){
-  if(!("serial" in navigator)){log("Web Serial not available in this browser.");return;}
-  if(!port)port=await navigator.serial.requestPort({filters:[{usbVendorId:VID,usbProductId:PID}]});
-  await port.open({baudRate:115200});
-  const writer=port.writable.getWriter();const enc=new TextEncoder();
-  let alive=true;
-  const me={write:s=>writer.write(enc.encode(s)),
-    close:async()=>{alive=false;try{writer.releaseLock();}catch(e){}try{await port.close();}catch(e){}}};
-  (async()=>{
-    const dec=new TextDecoder();
-    while(alive&&port.readable){
-      const reader=port.readable.getReader();
-      try{for(;;){const {value,done}=await reader.read();if(done)break;feed(dec.decode(value,{stream:true}));}}
-      catch(e){if(alive)log("read: "+e.message);}
-      finally{try{reader.releaseLock();}catch(e){}}
-      break;
+async function connectAdapter(id,known){
+  const ad=ADAPTERS.find(a=>a.id===id);if(!ad)throw new Error("unknown adapter "+id);
+  if(!adAvail()[ad.need])throw new Error(ad.label+" is not available in this browser.");
+  let t,pipe=null;
+  try{
+    if(ad.id==="gsusb"){
+      const d=(known&&known!==true)?known:await navigator.usb.requestDevice({filters:usbFilters([{classCode:0xFF}])});
+      t=new GsUsbTransport(d);
+    }else{
+      if(ad.pipe==="serial"){const port=(known&&known!==true)?known:await navigator.serial.requestPort(serialOpts());pipe=await pipeSerial(port);}
+      else if(ad.pipe==="usbcdc"){const d=(known&&known!==true)?known:await navigator.usb.requestDevice({filters:usbFilters([])});pipe=await pipeUsbCdc(d);}
+      else if(ad.pipe==="ble"){const d=(known&&known!==true)?known:await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:BLE_SVC});lastBle=d;pipe=await pipeBle(d);}
+      else if(ad.pipe==="ws"){pipe=await pipeWs(AD.wsUrl);}
+      t=ad.proto==="elm"?new ElmTransport(pipe):new SlcanTransport(pipe);
     }
-    if(alive&&link===me){alive=false;try{await port.close();}catch(e){}handleDrop();}
-  })();
-  link=me;
-  log("Web Serial opened.");
+    t.adId=id;t.onFrame=onFrame;t.onStatus=r=>diagOnStatus(r);t.onClose=()=>{if(link===t)handleDrop();};
+    await t.open();
+  }catch(e){if(pipe){try{await pipe.close();}catch(_){}}if(t&&t.kind==="gsusb"){try{await t.close();}catch(_){}}throw e;}
+  const i=t.info||{};lastInfo=(i.usbVendorId!=null)?{vid:i.usbVendorId,pid:i.usbProductId}:null;
+  link=t;log(ad.label+" opened.");
 }
-async function connectUsb(dev){
-  if(!("usb" in navigator)){log("WebUSB not available in this browser.");return;}
-  if(!dev)dev=await navigator.usb.requestDevice({filters:[{vendorId:VID,productId:PID}]});
-  await dev.open();
-  if(dev.configuration===null)await dev.selectConfiguration(1);
-  for(const n of [0,1]){try{await dev.claimInterface(n);}catch(e){log("claim "+n+": "+e.message);}}
-  try{await dev.controlTransferOut({requestType:"class",recipient:"interface",request:0x22,value:0x01,index:0});}catch(e){log("DTR: "+e.message);}
-  const enc=new TextEncoder(),dec=new TextDecoder();let alive=true;
-  const me={write:s=>dev.transferOut(1,enc.encode(s)),
-    close:async()=>{alive=false;try{await dev.close();}catch(e){}}};
-  (async()=>{
-    while(alive){
-      try{const r=await dev.transferIn(1,64);if(r.status==="ok"&&r.data)feed(dec.decode(r.data,{stream:true}));}
-      catch(e){if(alive)log("read: "+e.message);break;}
-    }
-    if(alive&&link===me){alive=false;try{await dev.close();}catch(e){}handleDrop();}
-  })();
-  link=me;
-  log("WebUSB opened.");
-}
-// The ONLY function that writes to the adapter.
+// The ONLY function that writes SLCAN command text to the adapter. Data frames never go through here.
 async function tx(cmd){
   if(!cmdAllowed(cmd))throw new Error("blocked command "+JSON.stringify(cmd));
   if(!link)throw new Error("not connected");
+  if(link.kind&&link.kind!=="slcan")throw new Error("SLCAN commands are for SLCAN adapters only");
   await link.write(cmd+"\r");
 }
 async function setup(kbps){
   const rate=kbps||curRate();const sc=SCODE[rate];
   if(sc===undefined)throw new Error("unsupported bitrate "+rate);
-  for(const c of ["C","S"+sc,"M1","O"]){await tx(c);await sleep(CFG.cmdMs);}
-  log("Configured: "+rate+" kbps, listen-only, open.");
+  if(!link)throw new Error("not connected");
+  const lo=MODE!=="diag";
+  await link.configure({bitrate:rate,listenOnly:lo});
+  log("Configured: "+rate+" kbps, "+(lo?"listen-only":"NORMAL mode (diagnostics)")+", open.");
 }
 async function go(kind,fn){
   lastKind=kind;userDisc=false;buf="";
@@ -635,53 +1038,63 @@ async function go(kind,fn){
     try{wake=await navigator.wakeLock.request("screen");}catch(e){}
   }catch(e){log("Connect failed: "+e.message);if(link){try{await link.close();}catch(_){}link=null;}setConn(false);}
 }
+async function knownDevice(ad){
+  const f=lastInfo;const same=(v,p)=>!f||f.vid==null||(v===f.vid&&(f.pid==null||p===f.pid));
+  if(ad.pipe==="serial"&&"serial" in navigator){const ps=(await navigator.serial.getPorts()).filter(p=>{const i=(p.getInfo&&p.getInfo())||{};return same(i.usbVendorId,i.usbProductId);});return ps[0]||null;}
+  if((ad.pipe==="usbcdc"||ad.pipe==="gsusb")&&"usb" in navigator){const ds=(await navigator.usb.getDevices()).filter(d=>same(d.vendorId,d.productId));return ds[0]||null;}
+  if(ad.pipe==="ble")return lastBle;
+  if(ad.pipe==="ws")return AD.wsUrl?true:null;
+  return null;
+}
 async function startReconnect(){
   if(reconnecting)return;reconnecting=true;setConn(false);
   while(!link&&!userDisc){
     try{
-      if(lastKind==="serial"&&"serial" in navigator){
-        const ps=(await navigator.serial.getPorts()).filter(p=>{const i=p.getInfo();return i.usbVendorId===VID&&i.usbProductId===PID;});
-        if(ps.length){await connectSerial(ps[0]);await setup();connAt=nowMs();reconnecting=false;setConn(true);mkEvent("RECONNECT");log("Reconnected.");return;}
-      }else if(lastKind==="usb"&&"usb" in navigator){
-        const ds=(await navigator.usb.getDevices()).filter(d=>d.vendorId===VID&&d.productId===PID);
-        if(ds.length){await connectUsb(ds[0]);await setup();connAt=nowMs();reconnecting=false;setConn(true);mkEvent("RECONNECT");log("Reconnected.");return;}
-      }
+      const ad=ADAPTERS.find(a=>a.id===lastKind);
+      const dev=ad?await knownDevice(ad):null;
+      if(dev){await connectAdapter(lastKind,dev);await setup();connAt=nowMs();reconnecting=false;setConn(true);mkEvent("RECONNECT");log("Reconnected.");return;}
     }catch(e){if(link){try{await link.close();}catch(_){}link=null;}}
     await sleep(2000);
   }
   reconnecting=false;setConn(false);
 }
 try{
-  if("serial" in navigator)navigator.serial.addEventListener("connect",()=>{if(lastKind==="serial"&&!link&&!userDisc)startReconnect();});
-  if("usb" in navigator)navigator.usb.addEventListener("connect",()=>{if(lastKind==="usb"&&!link&&!userDisc)startReconnect();});
+  const onPlug=need=>()=>{const a=ADAPTERS.find(x=>x.id===lastKind);if(a&&a.need===need&&!link&&!userDisc)startReconnect();};
+  if("serial" in navigator)navigator.serial.addEventListener("connect",onPlug("serial"));
+  if("usb" in navigator)navigator.usb.addEventListener("connect",onPlug("usb"));
 }catch(e){}
 async function disconnect(){
-  userDisc=true;if(link){try{await tx("C");}catch(e){}try{await link.close();}catch(e){}link=null;}
+  userDisc=true;
+  if(link){link.txEnabled=false;MODE="monitor";try{await link.stop();}catch(e){}try{await link.close();}catch(e){}link=null;}
   reconnecting=false;setConn(false);mkEvent("USER_DISCONNECT");log("Disconnected.");
 }
-function defaultKind(){return ("serial" in navigator)?"serial":"usb";}
-function connectDefault(){if(link||reconnecting)return;return defaultKind()==="serial"?go("serial",()=>connectSerial()):go("usb",()=>connectUsb());}
+function connectDefault(){
+  if(link||reconnecting)return;
+  const a=adCur();if(!a){toast("No supported adapter API in this browser.");return;}
+  return go(a.id,()=>connectAdapter(a.id));
+}
 function setConn(on){
-  $("bSerial").disabled=on||reconnecting;$("bUsb").disabled=on||reconnecting;$("bDisc").disabled=!(on||reconnecting);
+  $("bSerial").disabled=on||reconnecting||!adCur();$("bDisc").disabled=!(on||reconnecting);
+  if(!on&&!reconnecting)link=null;
+  if(!link)diagReset();
   $("bRec").disabled=!on&&!rec;$("bMark").disabled=!rec;
-  $("bTest").disabled=!(on&&selCtl&&!testing);$("wizGo").disabled=!(on&&!testing);$("bDetect").disabled=!on||!!rec||detecting;
+  $("bTest").disabled=!(on&&selCtl&&!testing);$("wizGo").disabled=!(on&&!testing);
+  $("bDetect").disabled=!on||!!rec||detecting||!!(link&&link.kind==="elm");
   $("wizInfo").textContent=on?"Ready.":"Connect first.";
   $("bConn").textContent=(on||reconnecting)?"Disconnect":"Connect";
-  if(!on&&!reconnecting)link=null;
-  renderChip();
+  renderChip();uiMode();
 }
 function renderChip(){
   const chip=$("chip"),t=$("st"),ch=$("chipHealth");
   const now=nowMs();
   if(link){
-    const quiet=(!lastFrameAt||now-lastFrameAt>3000)&&now-connAt>3000;
-    t.textContent=prof().name.split(" ")[0]+" · "+(quiet?"no data":curRate()+"k");chip.className="chip "+(quiet?"wait":"on");chip.setAttribute("aria-label","Connected to "+prof().name+" at "+curRate()+" kbps"+(quiet?", no data":""));
+    const quiet=(!lastFrameAt||now-lastFrameAt>3000)&&now-connAt>3000;const dg=MODE==="diag";
+    t.textContent=(dg?"Diag":prof().name.split(" ")[0])+" · "+(quiet&&!dg?"no data":curRate()+"k");chip.className="chip "+(dg?"diag":(quiet?"wait":"on"));chip.setAttribute("aria-label",(dg?"Diagnostics mode, ":"Connected to "+prof().name+" at ")+curRate()+" kbps"+(quiet&&!dg?", no data":""));
     const s=status(now);ch.hidden=false;ch.textContent=["OK","WARN","CHECK"][s.lvl];ch.className="s"+s.lvl;
   }else if(reconnecting){t.textContent="Reconnecting...";chip.className="chip wait";chip.setAttribute("aria-label","Reconnecting");ch.hidden=true;}
   else{t.textContent="Not connected";chip.className="chip off";chip.setAttribute("aria-label","Not connected");ch.hidden=true;}
 }
-$("bSerial").onclick=()=>go("serial",()=>connectSerial());
-$("bUsb").onclick=()=>go("usb",()=>connectUsb());
+$("bSerial").onclick=()=>{const a=adCur();if(!a){toast("No supported adapter API in this browser.");return;}return go(a.id,()=>connectAdapter(a.id));};
 $("bDisc").onclick=disconnect;
 $("bConn").onclick=()=>{if(link||reconnecting)disconnect();else connectDefault();};
 
@@ -690,6 +1103,8 @@ const DETECT_ORDER=[500,250,125,1000];
 async function autoDetect(){
   if(!link){toast("Connect first.");return null;}
   if(rec){toast("Stop recording before auto-detect.");return null;}
+  if(MODE==="diag"){toast("Return to Monitor before auto-detect.");return null;}
+  if(link.kind==="elm"){toast("Auto-detect is not available for ELM327.");return null;}
   if(detecting)return null;
   detecting=true;setConn(!!link);
   const prev=curRate();let found=null;
@@ -722,6 +1137,7 @@ function headerLines(label,t0){
   const p=prof();const h=[];
   h.push("# Hunter live capture, label: "+clean(label)+", started "+t0.toISOString());
   h.push("# APP "+APP+" "+APPV);
+  h.push("# ADAPTER type="+(link&&link.adId||AD.type||"unknown")+" mode="+MODE);
   h.push("# PROFILE id="+p.id+" name="+p.name.replace(/\s+/g,"_")+" bitrate="+(curRate()*1000)+" idfmt="+curFmt()+" listen_only=1");
   for(const k of sigKeys())h.push("# SIGNAL "+k+" = "+clean(SIG[k]));
   for(const d of DEC)h.push(decHeader(d));
@@ -1140,6 +1556,7 @@ function renderRec(now){
 }
 let tab="live";
 function showTab(t){
+  if(t==="diag"&&!DIAG.enabled)t="live";
   tab=t;
   document.querySelectorAll("[data-tab]").forEach(e=>{e.hidden=e.dataset.tab!==t;});
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.t===t)));
@@ -1150,13 +1567,390 @@ function showTab(t){
 document.querySelectorAll("#tabs button").forEach(b=>{b.onclick=()=>showTab(b.dataset.t);});
 function renderSlow(){
   const now=nowMs();
-  renderChip();renderRec(now);
+  renderChip();renderRec(now);diagIdleCheck(now);
   if(tab==="live"){if(isHunter())renderHunter();else renderObd(now);renderUG(now);renderRaw(now);}
   else if(tab==="identify"){buildIdSel(false);renderBytes(now);renderSig();}
   else if(tab==="health")renderHealth(now);
+  else if(tab==="diag")renderDiag();
 }
 setInterval(renderSlow,500);
 setInterval(()=>{renderHero();if(tab==="live")renderUG(nowMs());},100);
+
+// ---------- ISO-TP receive side (ISO 15765-2) ----------
+// Single frame, first frame + consecutive frames. When a first frame arrives the optional sendFc(id) callback is asked to send flow control.
+class IsoTpRx{
+  constructor(sendFc){this.s=new Map();this.sendFc=sendFc||null;}
+  reset(){this.s.clear();}
+  feed(id,d,now){
+    if(!d||!d.length)return null;
+    const t=d[0]>>4;
+    if(t===0){const n=d[0]&15;if(n<1||n>7||d.length<1+n)return {id,err:"bad single frame"};this.s.delete(id);return {id,payload:Uint8Array.from(d.slice(1,1+n))};}
+    if(t===1){
+      if(d.length<3)return {id,err:"short first frame"};
+      const len=((d[0]&15)<<8)|d[1];if(len<8)return {id,err:"bad first-frame length"};
+      this.s.set(id,{len,buf:Array.from(d.slice(2,2+Math.min(len,d.length-2))),sn:1,t:now});
+      if(this.sendFc)this.sendFc(id);
+      return null;
+    }
+    if(t===2){
+      const st=this.s.get(id);if(!st)return null;
+      if(now-st.t>1000){this.s.delete(id);return {id,err:"consecutive frame timeout"};}
+      if((d[0]&15)!==st.sn){this.s.delete(id);return {id,err:"sequence error"};}
+      const take=Math.min(st.len-st.buf.length,d.length-1);
+      for(let i=0;i<take;i++)st.buf.push(d[1+i]);
+      st.sn=(st.sn+1)&15;st.t=now;
+      if(st.buf.length>=st.len){this.s.delete(id);return {id,payload:Uint8Array.from(st.buf)};}
+      return null;
+    }
+    return null;  // flow-control frames from an ECU: we never send segmented messages
+  }
+}
+
+// ---------- OBD-II decoding ----------
+// DTC: first byte bits 7-6 = system (00 P, 01 C, 10 B, 11 U), bits 5-4 = first digit (0-3), bits 3-0 = second digit, second byte = last two digits.
+function dtcDecode(a,b){return "PCBU"[(a>>6)&3]+((a>>4)&3).toString(16)+(a&15).toString(16).toUpperCase()+hex2(b);}
+const DTC_DESC={
+P0100:"Mass air flow circuit malfunction",P0101:"MAF circuit range/performance",P0102:"MAF circuit low input",P0103:"MAF circuit high input",
+P0105:"MAP/barometric pressure circuit malfunction",P0106:"MAP circuit range/performance",P0107:"MAP circuit low input",P0108:"MAP circuit high input",
+P0110:"Intake air temperature circuit malfunction",P0112:"Intake air temperature circuit low",P0113:"Intake air temperature circuit high",
+P0115:"Engine coolant temperature circuit malfunction",P0117:"Coolant temperature circuit low",P0118:"Coolant temperature circuit high",
+P0120:"Throttle/pedal position sensor A circuit",P0121:"Throttle position sensor A range/performance",P0122:"Throttle position sensor A circuit low",P0123:"Throttle position sensor A circuit high",
+P0125:"Insufficient coolant temperature for closed-loop fuel control",P0128:"Coolant thermostat (temperature below regulating temperature)",
+P0130:"O2 sensor circuit (bank 1 sensor 1)",P0131:"O2 sensor circuit low voltage (bank 1 sensor 1)",P0132:"O2 sensor circuit high voltage (bank 1 sensor 1)",P0133:"O2 sensor slow response (bank 1 sensor 1)",P0134:"O2 sensor no activity (bank 1 sensor 1)",P0135:"O2 sensor heater circuit (bank 1 sensor 1)",
+P0136:"O2 sensor circuit (bank 1 sensor 2)",P0141:"O2 sensor heater circuit (bank 1 sensor 2)",
+P0171:"System too lean (bank 1)",P0172:"System too rich (bank 1)",P0174:"System too lean (bank 2)",P0175:"System too rich (bank 2)",
+P0201:"Injector circuit, cylinder 1",P0202:"Injector circuit, cylinder 2",P0203:"Injector circuit, cylinder 3",P0204:"Injector circuit, cylinder 4",
+P0217:"Engine overtemperature condition",P0220:"Throttle/pedal position sensor B circuit",P0230:"Fuel pump primary circuit",
+P0300:"Random/multiple cylinder misfire detected",P0301:"Cylinder 1 misfire detected",P0302:"Cylinder 2 misfire detected",P0303:"Cylinder 3 misfire detected",P0304:"Cylinder 4 misfire detected",P0305:"Cylinder 5 misfire detected",P0306:"Cylinder 6 misfire detected",
+P0325:"Knock sensor 1 circuit",P0335:"Crankshaft position sensor A circuit",P0336:"Crankshaft position sensor A range/performance",P0340:"Camshaft position sensor A circuit",P0341:"Camshaft position sensor A range/performance",
+P0351:"Ignition coil A primary/secondary circuit",P0352:"Ignition coil B primary/secondary circuit",
+P0400:"EGR flow malfunction",P0401:"EGR flow insufficient",P0420:"Catalyst efficiency below threshold (bank 1)",P0430:"Catalyst efficiency below threshold (bank 2)",
+P0440:"EVAP system malfunction",P0441:"EVAP incorrect purge flow",P0442:"EVAP small leak detected",P0443:"EVAP purge control valve circuit",P0446:"EVAP vent control circuit",P0455:"EVAP large leak detected",P0456:"EVAP very small leak detected",
+P0480:"Cooling fan 1 control circuit",P0500:"Vehicle speed sensor malfunction",P0505:"Idle control system malfunction",P0506:"Idle control RPM lower than expected",P0507:"Idle control RPM higher than expected",
+P0562:"System voltage low",P0563:"System voltage high",P0601:"Control module memory checksum error",P0606:"Control module processor fault",P0620:"Generator control circuit",
+P0700:"Transmission control system malfunction",P0705:"Transmission range sensor circuit"
+};
+const dtcDesc=c=>DTC_DESC[c]||null;   // generic SAE P0xxx wording only; manufacturer meaning may differ. Unknown codes are shown raw.
+const DTC_MODES={stored:{req:0x03,rsp:0x43,name:"Stored (Mode 03)"},pending:{req:0x07,rsp:0x47,name:"Pending (Mode 07)"},permanent:{req:0x0A,rsp:0x4A,name:"Permanent (Mode 0A)"}};
+// Response payload (after ISO-TP) of Mode 03/07/0A: [0x43|0x47|0x4A, count?, A,B, A,B ...]. ISO 15765-4 has a count byte; tolerate ECUs without it. 00 00 pairs are padding.
+function parseDtcPayload(p){
+  if(!p||p.length<1||(p[0]!==0x43&&p[0]!==0x47&&p[0]!==0x4A))return null;
+  let body=Array.from(p.slice(1)),count=null;
+  if(body.length%2===1){count=body[0];body=body.slice(1);}
+  const codes=[];for(let i=0;i+1<body.length;i+=2){if(body[i]===0&&body[i+1]===0)continue;codes.push(dtcDecode(body[i],body[i+1]));}
+  return {svc:p[0],count,codes};
+}
+// Mode 01 PID 00/20/40...: 4 bytes, MSB of byte A = PID base+1 ... LSB of byte D = base+0x20 ("more PIDs")
+function parsePidBitmap(base,b){const o=[];for(let i=0;i<32;i++)if(b[i>>3]&(0x80>>(i&7)))o.push(base+i+1);return o;}
+const MON_SPARK=["Catalyst","Heated catalyst","EVAP system","Secondary air","A/C refrigerant","O2 sensor","O2 sensor heater","EGR/VVT"];
+const MON_DIESEL=["NMHC catalyst","NOx/SCR","(reserved)","Boost pressure","(reserved)","Exhaust gas sensor","PM filter","EGR/VVT"];
+function decodeMonitorStatus(a,b,c,d){
+  const diesel=!!(b&8);const mon=[];
+  const cont=["Misfire","Fuel system","Components"];
+  for(let i=0;i<3;i++)if(b&(1<<i))mon.push({name:cont[i],complete:!(b&(0x10<<i))});
+  const names=diesel?MON_DIESEL:MON_SPARK;
+  for(let i=0;i<8;i++)if(c&(1<<i)&&names[i]!=="(reserved)")mon.push({name:names[i],complete:!(d&(1<<i))});
+  return {mil:!!(a&0x80),count:a&0x7F,diesel,monitors:mon};
+}
+function parseVin(p){
+  if(!p||p[0]!==0x49||p[1]!==0x02)return null;
+  const s=Array.from(p.slice(3)).filter(x=>x>=0x20&&x<0x7F).map(x=>String.fromCharCode(x)).join("").trim();
+  return {vin:s,valid:/^[A-HJ-NPR-Z0-9]{17}$/.test(s)};
+}
+function decodePidPayload(p){
+  if(!p||p[0]!==0x41||p.length<3)return null;const pid=p[1];
+  if(pid===0x01&&p.length>=6){const m=decodeMonitorStatus(p[2],p[3],p[4],p[5]);return {pid,mon:m,v:m.count,name:"MIL / DTC count",unit:""};}
+  const def=OBDP[pid];if(!def||p.length<2+def.l)return null;
+  return {pid,v:def.f(p[2],p[3]||0),name:def.n,unit:def.u};
+}
+
+// ---------- Diagnostics core ----------
+// This is the ONLY code that transmits CAN data. Everything it can send is checked by diagFrameOk()/obdPayloadOk():
+// Mode 01 (any PID), 03, 04, 07, 09 (PID 00/02), 0A requests to 0x7DF or 0x7E0-0x7E7, plus the ISO-TP flow-control frame 30 00 00.
+// No UDS, no write/security/routine/flash services, no arbitrary-frame sender exists.
+class DiagError extends Error{constructor(code,msg){super(msg||code);this.code=code;}}
+const DLIM={minGap:50,perSec:30,idleExit:300000,rpmWindow:10000,timeout:1000,quiet:250,maxWait:5000,readFresh:900000,logMax:200};
+function sfFrame(p){const d=new Uint8Array(8);d[0]=p.length;for(let i=0;i<p.length;i++)d[1+i]=p[i];return d;}
+function obdPayloadOk(p){
+  if(!p||!p.length)return false;const s=p[0];
+  if(s===0x01)return p.length===2&&p[1]>=0&&p[1]<=0xFF;
+  if(s===0x09)return p.length===2&&(p[1]===0x00||p[1]===0x02);
+  if(s===0x03||s===0x04||s===0x07||s===0x0A)return p.length===1;
+  return false;
+}
+function diagFrameOk(id,d){
+  if(!(id===0x7DF||(id>=0x7E0&&id<=0x7E7)))return false;
+  if(!d||d.length<3||d.length>8)return false;
+  const pci=d[0]>>4;
+  const zeroFrom=i=>{for(let k=i;k<d.length;k++)if(d[k]!==0)return false;return true;};   // padding must be 0x00: no hidden payload
+  if(pci===0){const n=d[0]&15;if(n<1||n>2||d.length<1+n)return false;return obdPayloadOk(Array.from(d).slice(1,1+n))&&zeroFrom(1+n);}
+  if(pci===3)return d[0]===0x30&&d[1]===0&&d[2]===0&&id!==0x7DF&&zeroFrom(3);
+  return false;
+}
+const DIAG={enabled:false,busy:false,log:[],txN:0,lastTx:0,txTimes:[],lastRead:null,q:null,chain:Promise.resolve(),activity:0,liveOn:false,
+  dtc:{},supported:null,live:new Map(),vin:null,mil:null,
+  rx:new IsoTpRx(id=>{if(link&&link.caps&&link.caps.isotp)return;diagTx(id-8,FC_FRAME,{fc:true}).catch(e=>log("Flow control not sent: "+e.message));})};
+const FC_FRAME=Uint8Array.from([0x30,0,0,0,0,0,0,0]);
+const RPMSEEN={t:0,v:0};
+function noteRpm(v,now){if(v>0){RPMSEEN.t=now;RPMSEEN.v=v;}}
+function engineRunning(now){return !!RPMSEEN.t&&now-RPMSEEN.t<DLIM.rpmWindow;}   // fed by every RPM source: OBD PID 0C, Hunter 0x100, user decoders with unit rpm
+function diagLog(dir,id,d,note){
+  DIAG.log.push({t:nowMs(),dir,id,d:Array.from(d),note:note||""});
+  if(DIAG.log.length>DLIM.logMax)DIAG.log.splice(0,DIAG.log.length-DLIM.logMax);
+}
+// The ONLY place a data frame or OBD request leaves the app.
+async function diagTx(id,data,o){
+  o=o||{};
+  if(MODE!=="diag")throw new DiagError("mode","Transmit refused: not in Diagnostics mode.");
+  if(!link||!link.txEnabled||link.listenOnly)throw new DiagError("listen","Transmit refused: the adapter is in listen-only mode.");
+  if(!diagFrameOk(id,data))throw new DiagError("frame","Transmit refused: not a standard OBD-II request.");
+  const now=nowMs();
+  DIAG.txTimes=DIAG.txTimes.filter(t=>now-t<1000);
+  if(DIAG.txTimes.length>=DLIM.perSec)throw new DiagError("rate","Transmit refused: rate limit ("+DLIM.perSec+" frames per second).");
+  if(!o.fc&&DIAG.lastTx&&now-DIAG.lastTx<DLIM.minGap)throw new DiagError("rate","Transmit refused: requests too close together.");
+  const iso=!!(link.caps&&link.caps.isotp);
+  if(iso&&o.fc)return;                       // ELM327 answers flow control itself
+  const payload=iso?Array.from(data).slice(1,1+(data[0]&15)):null;
+  const logged=iso?payload:Array.from(data);
+  DIAG.txTimes.push(now);if(!o.fc)DIAG.lastTx=now;DIAG.activity=now;DIAG.txN++;
+  diagLog("TX",id,logged,iso?"isotp":"");
+  if(rec)rec.lines.push("# TX "+((now-rec.start)/1000).toFixed(4)+" "+capId(id)+" "+logged.length+" "+logged.map(hex2).join(" ")+(iso?" isotp":""));
+  if(iso)await link.sendRequest(id,payload);else await link.sendFrame(id,false,data);
+}
+function diagOnFrame(id,d,now){
+  diagLog("RX",id,d);
+  const r=DIAG.rx.feed(id,d,now);
+  if(!r)return;
+  if(r.err){log("ISO-TP "+r.err+" from 0x"+id.toString(16).toUpperCase());return;}
+  const q=DIAG.q;if(!q)return;const p=r.payload;
+  if(p[0]===q.svc&&(q.pid==null||p[1]===q.pid)){q.msgs.push({ecu:id,payload:p});q.last=nowMs();}
+  else if(p[0]===0x7F&&p[1]===q.req){if(p[2]===0x78)q.pendingUntil=nowMs()+DLIM.maxWait;else{q.neg.push({ecu:id,nrc:p[2]});q.last=nowMs();}}
+}
+function diagOnStatus(r){const q=DIAG.q;if(q&&r.t==="nodata")q.nodata=true;}
+async function runQuery(payload,opt){
+  opt=opt||{};const id=opt.id||0x7DF;
+  const q={req:payload[0],svc:payload[0]+0x40,pid:(payload[0]===1||payload[0]===9)?payload[1]:null,msgs:[],neg:[],last:0,nodata:false,pendingUntil:0};
+  const wait=DLIM.minGap-(nowMs()-DIAG.lastTx);if(DIAG.lastTx&&wait>0)await sleep(wait+2);
+  DIAG.q=q;DIAG.rx.reset();
+  const t0=nowMs(),tmo=opt.timeout||DLIM.timeout;
+  try{
+    await diagTx(id,sfFrame(payload));
+    for(;;){
+      await sleep(10);const now=nowMs();
+      if(q.msgs.length||q.neg.length){if(now-q.last>=(opt.quiet||DLIM.quiet)&&now>=q.pendingUntil)break;}
+      else if(q.nodata)break;
+      if(now-t0>tmo&&now>=q.pendingUntil)break;
+      if(now-t0>tmo+DLIM.maxWait)break;
+    }
+  }finally{DIAG.q=null;}
+  return q;
+}
+function diagQuery(payload,opt){const p=DIAG.chain.then(()=>runQuery(payload,opt));DIAG.chain=p.catch(()=>{});return p;}
+async function diagReadSupported(){
+  const sup=new Map();let base=0;
+  for(let i=0;i<7;i++){
+    const r=await diagQuery([1,base]);let more=false;
+    for(const m of r.msgs){
+      if(m.payload.length<6)continue;const set=sup.get(m.ecu)||new Set();
+      for(const p of parsePidBitmap(base,m.payload.slice(2,6)))set.add(p);sup.set(m.ecu,set);if(set.has(base+0x20))more=true;
+    }
+    if(!more)break;base+=0x20;
+  }
+  DIAG.supported=sup;return sup;
+}
+async function diagReadPid(pid){
+  const r=await diagQuery([1,pid]);const out=[];
+  for(const m of r.msgs){const v=decodePidPayload(m.payload);if(v){DIAG.live.set(pid,Object.assign({ecu:m.ecu,t:nowMs()},v));out.push(v);}}
+  if(pid===0x01&&out.length)DIAG.mil=out[0].mon;
+  return out;
+}
+async function diagReadVin(){
+  const r=await diagQuery([9,2],{timeout:2000});
+  for(const m of r.msgs){const v=parseVin(m.payload);if(v){DIAG.vin=Object.assign({ecu:m.ecu},v);return DIAG.vin;}}
+  return null;
+}
+async function diagReadDtcs(kind){
+  const m=DTC_MODES[kind];if(!m)throw new DiagError("kind","unknown DTC mode");
+  const r=await diagQuery([m.req],{timeout:1500});
+  const ecus=[];for(const x of r.msgs){const p=parseDtcPayload(x.payload);if(p)ecus.push({ecu:x.ecu,count:p.count,codes:p.codes.map(c=>({code:c,desc:dtcDesc(c)}))});}
+  const res={kind,ecus,neg:r.neg,nodata:!r.msgs.length,t:nowMs()};
+  DIAG.dtc[kind]=res;if(kind==="stored"&&ecus.length)DIAG.lastRead=nowMs();
+  return res;
+}
+// Mode 04. Every guard is enforced here, not only in the UI.
+async function clearDtcs(o){
+  o=o||{};
+  if(MODE!=="diag"||!link||!link.txEnabled||link.listenOnly)throw new DiagError("mode","Clearing codes is only possible in Diagnostics mode.");
+  if(o.confirm!=="CLEAR")throw new DiagError("confirm","Type CLEAR to confirm.");
+  if(!DIAG.lastRead||nowMs()-DIAG.lastRead>DLIM.readFresh)throw new DiagError("review","Read the stored codes first, so you can see what will be erased.");
+  if(engineRunning(nowMs()))throw new DiagError("rpm","Refused: engine RPM above zero was seen on the bus. Stop the engine first.");
+  const rr=await diagQuery([1,0x0C]);                       // live check: ask the ECU itself
+  for(const m of rr.msgs){const v=decodePidPayload(m.payload);if(v&&v.v>0)throw new DiagError("rpm","Refused: the ECU reports engine speed above zero.");}
+  const sp=await diagQuery([1,0x0D]);
+  for(const m of sp.msgs){const v=decodePidPayload(m.payload);if(v&&v.v>0)throw new DiagError("moving","Refused: the ECU reports vehicle speed above zero.");}
+  const before=DIAG.dtc.stored;
+  const r=await diagQuery([0x04],{timeout:3000});
+  const ok=r.msgs.length>0;
+  await sleep(DLIM.minGap+10);
+  const after=await diagReadDtcs("stored");
+  DIAG.lastRead=null;                                       // a new review is needed before the next clear
+  return {ok,responders:r.msgs.map(m=>m.ecu),neg:r.neg,before,after,remaining:after.ecus.reduce((n,e)=>n+e.codes.length,0)};
+}
+function stopLive(){DIAG.liveOn=false;}
+function startLive(pids){
+  if(MODE!=="diag"||DIAG.liveOn)return;DIAG.liveOn=true;const t0=nowMs();
+  (async()=>{
+    try{while(DIAG.liveOn&&MODE==="diag"&&nowMs()-t0<120000){
+      for(const pid of pids){if(!DIAG.liveOn||MODE!=="diag")break;await diagReadPid(pid);await sleep(DLIM.minGap*2);}
+      await sleep(250);}
+    }catch(e){log("Live data stopped: "+e.message);}
+    DIAG.liveOn=false;renderDiag();
+  })();
+}
+function diagReset(){
+  DIAG.q=null;DIAG.rx.reset();DIAG.liveOn=false;DIAG.lastRead=null;DIAG.dtc={};DIAG.supported=null;DIAG.vin=null;DIAG.mil=null;DIAG.live.clear();DIAG.busy=false;
+  if(MODE!=="monitor")MODE="monitor";
+  if(link)link.txEnabled=false;
+}
+// ---------- mode switching ----------
+async function setMode(m){
+  if(m==="diag"){
+    if(!DIAG.enabled)throw new DiagError("disabled","Diagnostics is not enabled (Settings).");
+    if(!link)throw new DiagError("conn","Connect an adapter first.");
+    if(MODE==="diag")return true;
+    if(detecting||testing||reconnecting)throw new DiagError("busy","Wait for the current task to finish.");
+    MODE="diag";
+    try{await setup();link.txEnabled=true;DIAG.activity=nowMs();DIAG.lastTx=0;mkEvent("MODE_DIAGNOSTICS");log("DIAGNOSTICS mode: adapter in normal mode, standard OBD-II requests allowed.");}
+    catch(e){MODE="monitor";if(link){link.txEnabled=false;try{await setup();}catch(_){}}uiMode();throw e;}
+  }else{
+    if(MODE==="monitor")return true;
+    stopLive();DIAG.q=null;if(link)link.txEnabled=false;MODE="monitor";   // TX flag off BEFORE the adapter is reconfigured
+    try{if(link)await setup();}catch(e){log("Return to listen-only failed: "+e.message);}
+    mkEvent("MODE_MONITOR");log("MONITOR mode: listen-only, nothing is transmitted.");
+  }
+  uiMode();renderDiag();return true;
+}
+function diagIdleCheck(now){if(MODE==="diag"&&!DIAG.busy&&now-DIAG.activity>DLIM.idleExit){toast("Diagnostics idle for 5 minutes: back to Monitor.");setMode("monitor").catch(()=>{});}}
+async function enableDiag(on){
+  if(on){DIAG.enabled=true;}
+  else{DIAG.enabled=false;try{await setMode("monitor");}catch(e){}if(tab==="diag")showTab("settings");}
+  uiDiagEnabled();
+}
+
+// ---------- adapter picker + mode banner + Diagnostics UI ----------
+function buildAdapterSel(){
+  const sel=$("adSel"),l=adList(),cur=adCur();
+  sel.innerHTML=l.map(a=>'<option value="'+a.id+'"'+(cur&&a.id===cur.id?" selected":"")+'>'+esc(a.label)+'</option>').join("")||'<option value="">No supported adapter API in this browser</option>';
+  if(cur)sel.value=cur.id;
+  $("baudSel").innerHTML=BAUDS.map(b=>'<option value="'+b+'"'+(b===AD.baud?" selected":"")+'>'+b+'</option>').join("");
+  $("filtSel").innerHTML=Object.keys(FILTERS).map(k=>'<option value="'+k+'"'+(k===AD.filter?" selected":"")+'>'+esc(FILTERS[k].label)+'</option>').join("");
+  $("styleSel").value=AD.style;$("vidIn").value=AD.vid;$("pidIn").value=AD.pid;$("wsUrl").value=AD.wsUrl;
+  adUi();
+}
+function adUi(){
+  const a=adCur();const id=a?a.id:"";
+  $("adSerialRow").hidden=!(a&&(a.pipe==="serial"||a.pipe==="usbcdc"));
+  $("adFiltRow").hidden=!(a&&(a.pipe==="serial"||a.pipe==="usbcdc"||a.pipe==="gsusb"));
+  $("adCustomRow").hidden=$("adFiltRow").hidden||AD.filter!=="custom";
+  $("adStyleRow").hidden=!(a&&a.proto==="slcan");
+  $("adWsRow").hidden=id!=="ws";
+  const notes={
+    "slcan-serial":"SLCAN text over a USB serial port. Works with CANable V1/V2 (slcan firmware), USBtin, CANtact and any SLCAN device. Pick the listen-only style that matches your firmware.",
+    "slcan-usb":"SLCAN text over WebUSB (CDC data endpoints are discovered automatically). Use this if Web Serial cannot see the device.",
+    "gsusb":"candleLight / gs_usb binary protocol over WebUSB (CANable V2 with candlelight firmware). UNTESTED on real hardware. The adapter must not be claimed by another app.",
+    "elm-serial":"ELM327 over a USB serial port. ELM327 monitoring (ATMA) is limited: it is slow, can drop frames and has no timestamps. Use it mainly for Diagnostics. Only 250 and 500 kbps. No auto-detect.",
+    "elm-ble":"ELM327 over Bluetooth Low Energy (UART service FFE0/FFF0). Many cheap dongles use classic Bluetooth, which browsers cannot open. ELM327 monitoring is limited; use it mainly for Diagnostics.",
+    "ws":"WebSocket bridge that speaks SLCAN text (for a future ESP32 / Raspberry Pi gateway). A page served over https can only open wss:// (or ws:// to localhost); browsers block plain ws:// to other hosts.",
+    "ble-slcan":"BLE-UART bridge that speaks SLCAN text (for a future ESP32 wireless gateway)."};
+  $("adNote").textContent=notes[id]||"This browser has no Web Serial, WebUSB, Web Bluetooth or WebSocket support for adapters.";
+  $("bSerial").disabled=!a||!!link||reconnecting;
+}
+$("adSel").onchange=()=>{if(link||reconnecting){toast("Disconnect before changing the adapter type.");buildAdapterSel();return;}AD.type=$("adSel").value;saveAd();adUi();};
+$("baudSel").onchange=()=>{AD.baud=+$("baudSel").value||115200;saveAd();};
+$("filtSel").onchange=()=>{AD.filter=$("filtSel").value;saveAd();adUi();};
+$("vidIn").onchange=()=>{AD.vid=$("vidIn").value.trim();saveAd();};
+$("pidIn").onchange=()=>{AD.pid=$("pidIn").value.trim();saveAd();};
+$("styleSel").onchange=()=>{if(link){toast("Disconnect before changing the listen-only style.");$("styleSel").value=AD.style;return;}AD.style=$("styleSel").value==="L"?"L":"M";saveAd();};
+$("wsUrl").onchange=()=>{AD.wsUrl=$("wsUrl").value.trim();saveAd();};
+
+function uiMode(){
+  const d=MODE==="diag";renderChip();
+  $("modeBar").className="modebar "+(d?"diag":"mon");
+  $("modeTxt").textContent=d?"DIAGNOSTICS · ACTIVE TX":"MONITOR · read-only";
+  $("modeSub").textContent=d?"Adapter in normal mode. Only standard OBD-II requests are sent.":"Listen-only. No data frames are transmitted.";
+  $("bToMon").hidden=!d;
+}
+function uiDiagEnabled(){
+  $("tabDiag").hidden=!DIAG.enabled;
+  $("bDiagEnable").textContent=DIAG.enabled?"Disable Diagnostics":"Enable Diagnostics...";
+  $("diagState").textContent=DIAG.enabled?"Enabled for this session. The Diag tab is available.":"Off. The Diag tab is hidden and nothing can be transmitted.";
+  renderDiag();
+}
+$("bDiagEnable").onclick=()=>{if(DIAG.enabled){enableDiag(false);return;}$("diagAck").checked=false;$("bWarnOk").disabled=true;$("diagWarn").hidden=false;};
+$("diagAck").onchange=()=>{$("bWarnOk").disabled=!$("diagAck").checked;};
+$("bWarnCancel").onclick=()=>{$("diagWarn").hidden=true;};
+$("bWarnOk").onclick=()=>{if(!$("diagAck").checked)return;$("diagWarn").hidden=true;enableDiag(true);showTab("diag");};
+$("bToMon").onclick=()=>{setMode("monitor").catch(e=>toast(e.message));};
+$("bDiagStop").onclick=()=>{setMode("monitor").catch(e=>toast(e.message));};
+$("bDiagStart").onclick=async()=>{try{await setMode("diag");}catch(e){toast(e.message);}};
+
+async function diagAction(fn){
+  if(DIAG.busy)return;DIAG.busy=true;DIAG.activity=nowMs();$("dgMsg").textContent="Working...";renderDiag();
+  try{await fn();$("dgMsg").textContent="";}
+  catch(e){$("dgMsg").textContent=e.message;log("Diagnostics: "+e.message);}
+  DIAG.busy=false;renderDiag();
+}
+const ecuName=id=>"ECU 0x"+id.toString(16).toUpperCase();
+function dtcHtml(res){
+  if(!res)return '<span class="note">Not read yet.</span>';
+  if(res.nodata)return '<span class="note">No ECU answered (NO DATA). The vehicle may not support standard OBD-II on this bus.</span>';
+  return res.ecus.map(e=>'<div class="dtcEcu"><b>'+ecuName(e.ecu)+'</b> <span class="note">'+(e.codes.length?e.codes.length+" code(s)":"no codes")+(e.count!=null?" (ECU reports "+e.count+")":"")+'</span>'+
+    e.codes.map(c=>'<div class="dtc"><b>'+esc(c.code)+'</b> '+(c.desc?esc(c.desc)+' <span class="tag">generic</span>':'<span class="note">unknown code (shown raw)</span>')+'</div>').join("")+'</div>').join("");
+}
+function renderDiag(){
+  const d=MODE==="diag",ok=d&&!DIAG.busy;
+  $("dgModeTxt").textContent=!link?"Not connected.":(d?"Diagnostics mode is ACTIVE: the adapter is in normal mode and may transmit standard OBD-II requests.":"Monitor mode: the adapter is listen-only.");
+  $("bDiagStart").hidden=d;$("bDiagStart").disabled=!(link&&DIAG.enabled&&!DIAG.busy&&!reconnecting);$("bDiagStop").hidden=!d;
+  $("dgHunter").hidden=!isHunter();$("dgElm").hidden=!(link&&link.kind==="elm");
+  for(const id of ["bPids","bVin","bMil","bLiveOnce","bLive","bDtc3","bDtc7","bDtc0A","bClearOpen"])$(id).disabled=!ok;
+  $("bLive").textContent=DIAG.liveOn?"Stop live":"Live polling";$("bLive").disabled=!d;
+  const sup=DIAG.supported;
+  $("dgInfo").innerHTML=(DIAG.vin?'<div><b>VIN</b> <span style="font-family:var(--mono)">'+esc(DIAG.vin.vin||"(empty)")+'</span> '+(DIAG.vin.valid?'':'<span class="tag t-un">not a valid 17-character VIN</span>')+' <span class="note">'+ecuName(DIAG.vin.ecu)+'</span></div>':"")+
+    (DIAG.mil?'<div><b>MIL</b> '+(DIAG.mil.mil?'<span class="t-cand">ON</span>':'off')+', <b>'+DIAG.mil.count+'</b> stored code(s). Monitors: '+(DIAG.mil.monitors.map(m=>esc(m.name)+(m.complete?" done":" INCOMPLETE")).join(", ")||"none reported")+'</div>':"")+
+    (sup?[...sup.entries()].map(([e,s])=>'<div><b>'+ecuName(e)+'</b> supports PIDs: <span style="font-family:var(--mono)">'+[...s].filter(p=>p%0x20!==0).sort((a,b)=>a-b).map(hex2).join(" ")+'</span></div>').join("")||'<div class="note">No ECU answered the PID query.</div>':"");
+  const lv=[...DIAG.live.entries()].sort((a,b)=>a[0]-b[0]);
+  $("dgLive").innerHTML=lv.map(([p,o])=>'<div class="tile"><div class="k">'+esc(o.name)+' <span class="tag">PID '+hex2(p)+'</span></div><div class="v">'+fmtNum(o.v)+' <small>'+esc(o.unit)+'</small></div></div>').join("");
+  $("dgDtc3").innerHTML=dtcHtml(DIAG.dtc.stored);$("dgDtc7").innerHTML=dtcHtml(DIAG.dtc.pending);$("dgDtc0A").innerHTML=dtcHtml(DIAG.dtc.permanent);
+  $("dgTxCount").textContent=DIAG.txN+" frame(s) transmitted this session. Limits: "+DLIM.minGap+" ms between requests, "+DLIM.perSec+" frames per second.";
+  $("dgRec").textContent=rec?"Recording is on: every TX frame is written to the capture as a '# TX' line.":"Not recording. TX frames are shown here only. Start a recording (Record tab) to keep a '# TX' audit trail in the capture file.";
+  const L=DIAG.log.slice(-40);
+  $("dgTx").textContent=L.map(x=>new Date(Date.now()-(nowMs()-x.t)).toLocaleTimeString()+"  "+x.dir+"  "+x.id.toString(16).toUpperCase().padStart(3,"0")+"  "+x.d.map(hex2).join(" ")+(x.note?"  ("+x.note+")":"")).join("\n");
+  $("bClearGo").disabled=!(ok&&$("clearInp").value==="CLEAR");
+}
+$("bPids").onclick=()=>diagAction(async()=>{await diagReadSupported();});
+$("bVin").onclick=()=>diagAction(async()=>{const v=await diagReadVin();if(!v)$("dgMsg").textContent="No VIN answer (Mode 09 PID 02 may be unsupported).";});
+$("bMil").onclick=()=>diagAction(async()=>{await diagReadPid(0x01);});
+const LIVE_PIDS=[0x0C,0x0D,0x05,0x04,0x11,0x0B,0x0F,0x2F];
+$("bLiveOnce").onclick=()=>diagAction(async()=>{for(const p of LIVE_PIDS)await diagReadPid(p);});
+$("bLive").onclick=()=>{if(DIAG.liveOn)stopLive();else startLive(LIVE_PIDS);renderDiag();};
+$("bDtc3").onclick=()=>diagAction(async()=>{await diagReadDtcs("stored");});
+$("bDtc7").onclick=()=>diagAction(async()=>{await diagReadDtcs("pending");});
+$("bDtc0A").onclick=()=>diagAction(async()=>{await diagReadDtcs("permanent");});
+$("bClearOpen").onclick=()=>diagAction(async()=>{
+  const r=await diagReadDtcs("stored");
+  const n=r.ecus.reduce((a,e)=>a+e.codes.length,0);
+  $("clearWhat").innerHTML='<b>'+n+' stored code(s)</b> are shown above and will be erased. Clearing also erases freeze-frame data and resets the readiness monitors (emissions self-tests) of every ECU that answers. Permanent codes (Mode 0A) are not cleared by this and return until the car completes its own drive cycle. Clearing may hide a real fault.';
+  $("clearBox").hidden=false;$("clearInp").value="";
+});
+$("clearInp").oninput=()=>{$("bClearGo").disabled=!(MODE==="diag"&&!DIAG.busy&&$("clearInp").value==="CLEAR");};
+$("bClearCancel").onclick=()=>{$("clearBox").hidden=true;$("clearInp").value="";};
+$("bClearGo").onclick=()=>diagAction(async()=>{
+  const res=await clearDtcs({confirm:$("clearInp").value});
+  $("clearBox").hidden=true;$("clearInp").value="";
+  $("clearRes").hidden=false;
+  $("clearRes").textContent=(res.ok?"Mode 04 acknowledged by "+res.responders.map(e=>ecuName(e)).join(", ")+". ":"No ECU acknowledged Mode 04. ")+"Stored codes re-read: "+(res.after.nodata?"no answer":res.remaining+" code(s) remain")+". Readiness monitors are reset until the car completes its drive cycle.";
+});
+$("bDiagRec").onclick=()=>{if(!rec)$("bRec").onclick();};
 
 // ---------- profile UI ----------
 function buildRateSel(){
@@ -1178,6 +1972,7 @@ async function setProfile(id){
   if(!PROFILES[id])return false;
   if(rec){toast("Stop recording before switching vehicle profile.");return false;}
   if(id===cfg.profile)return true;
+  if(MODE==="diag"){toast("Return to Monitor before switching vehicle profile.");return false;}
   cfg.profile=id;saveCfg();resetLive();applyProfile();selId=null;idSelCount=-1;
   if(link){try{await setup();}catch(e){log("Re-apply bitrate failed: "+e.message);}}
   renderSlow();return true;
@@ -1185,6 +1980,7 @@ async function setProfile(id){
 document.querySelectorAll("#profPick button").forEach(b=>{b.onclick=()=>setProfile(b.dataset.p);});
 $("rateSel").onchange=async()=>{
   if(rec){toast("Stop recording before changing bitrate.");buildRateSel();return;}
+  if(MODE==="diag"){toast("Return to Monitor before changing bitrate.");buildRateSel();return;}
   cfg.rate[cfg.profile]=+$("rateSel").value;saveCfg();$("profLbl").textContent=prof().name+" · listen-only";
   resetLive();if(link){try{await setup();}catch(e){log("Re-apply bitrate failed: "+e.message);}}
 };
@@ -1201,11 +1997,12 @@ $("bOnbShow").onclick=()=>{showOnb(true);showTab("live");};
 document.addEventListener&&document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState==="visible"&&link){try{wake=await navigator.wakeLock.request("screen");}catch(e){}}});
 applyProfile();
+buildAdapterSel();uiDiagEnabled();uiMode();
 showOnb(!lsGet("hcl.onb",0));
 setConn(false);
 showTab("live");
 if(typeof requestAnimationFrame==="function"){buildTicks(GA.base);gaRaf=requestAnimationFrame(gaLoop);}else buildTicks(GA.base);
-log("Ready. Plug in the CANable via OTG, then tap Connect.");
+log("Ready. Pick an adapter in Settings if needed, plug it in, then tap Connect.");
 </script>
 <script>if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost"))navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
 </body>

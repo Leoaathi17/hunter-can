@@ -1,0 +1,152 @@
+[
+ {
+  "name": "syntax: index.html script, sw.js, manifest JSON, python analyzer",
+  "ok": true,
+  "detail": "script, sw.js, manifest, analyzer OK"
+ },
+ {
+  "name": "no external network or CDN dependencies",
+  "ok": true,
+  "detail": "none found; one user-driven WebSocket site"
+ },
+ {
+  "name": "parser: real capture sample.txt = 42580 frames, matches Python parse per ID",
+  "ok": true,
+  "detail": "42580 frames, 10 IDs, identical to Python per-ID counts"
+ },
+ {
+  "name": "parser: arbitrary chunk splits (random 1-37 chars and byte-by-byte) give identical result",
+  "ok": true,
+  "detail": "random chunks + 30000 single-char feeds identical"
+ },
+ {
+  "name": "parser: garbage, glued junk, glued frames, bells, truncated frames resync",
+  "ok": true,
+  "detail": "delivered 8, bel=2 resync=3 bad=3 rtr=1, overflow guard OK"
+ },
+ {
+  "name": "29-bit: T frames parse, 8 hex digit display, no collision with 11-bit, ID-format filter",
+  "ok": true,
+  "detail": "T/t parsed, 8-digit ids, filter modes OK"
+ },
+ {
+  "name": "command allow-list: only C, S0-S8, M1, O, V; t/T data frames and S outside 0-8 rejected",
+  "ok": true,
+  "detail": "13 allowed accepted, 34 dangerous strings blocked, adapter saw only allowed commands"
+ },
+ {
+  "name": "bitrate S-codes: 10k..1M map to S0..S8, invalid bitrate refused, listen-only M1 always sent before O",
+  "ok": true,
+  "detail": "9 bitrates verified, sequence C,S<n>,M1,O each time"
+ },
+ {
+  "name": "auto-detect: mock yields frames only at 250k -> picks 250k (500k noisy with beeps)",
+  "ok": true,
+  "detail": "detected 250 kbps after trying 500 (beeps rejected)"
+ },
+ {
+  "name": "auto-detect: order 500,250,125,1000, picks 1M; and restores previous rate when nothing found",
+  "ok": true,
+  "detail": "order S6,S5,S4,S8; 1M selected; restore to S6 when none"
+ },
+ {
+  "name": "profile switching: Hunter decoders hidden on car and shown again, state reset, controls/names swapped",
+  "ok": true,
+  "detail": "hunter<->car<->custom toggles data-prof sections, KNOWN names, controls, hero sources"
+ },
+ {
+  "name": "profile settings: defaults 500k/11-bit-capable, custom bitrate + format persist, applied on connected link",
+  "ok": true,
+  "detail": "persisted across reload"
+ },
+ {
+  "name": "user-defined decoder math: endianness, signed, scale, offset, 32-bit, short frames",
+  "ok": true,
+  "detail": "BE/LE/signed/scale/offset/24/32-bit verified against hand-computed values"
+ },
+ {
+  "name": "user decoder: validation, injection-safe names, per-profile storage, export/import round trip, capture header",
+  "ok": true,
+  "detail": "sanitisation, per-profile storage, export/import, header lines OK"
+ },
+ {
+  "name": "passive OBD-II: decodes responses on 0x7E8-0x7EF only, never transmits; live gauge from user decoder",
+  "ok": true,
+  "detail": "RPM 1726, speed 60, coolant 83, voltage 14.4 decoded; 0 requests transmitted"
+ },
+ {
+  "name": "health counters, OK/WARN/CHECK status, error beeps, malformed",
+  "ok": true,
+  "detail": "OK/WARN/CHECK thresholds, beep & malformed counters, reset, Hunter-only counter jumps verified"
+ },
+ {
+  "name": "bus-load estimate and per-ID gap/stale timeline (mock clock)",
+  "ok": true,
+  "detail": "load 26.1% (expected 26.1%), gap 2.5 s detected, 1 Hz ID not flagged"
+ },
+ {
+  "name": "byte entropy, changed-bit mask",
+  "ok": true,
+  "detail": "entropy 8/0/1/4 bits and toggle masks exact"
+ },
+ {
+  "name": "counter/checksum-likely hints (flagged as hints) and no false positives on random data",
+  "ok": true,
+  "detail": "counter(+1), nibble counter, monotonic, XOR and SUM+const checksums found; random/constant bytes not flagged"
+ },
+ {
+  "name": "find-signal compare: changed bytes, bit mask, noisy-baseline penalty",
+  "ok": true,
+  "detail": "top = 0x1A0 B1 0x00->0x3C bits 0x3C; counter byte demoted"
+ },
+ {
+  "name": "Find signal wizard end-to-end with mock bus (baseline vs action) + capture marks",
+  "ok": true,
+  "detail": "top candidate 0x1A0 B2 00->3F, marks written, name saved, gauge form prefilled"
+ },
+ {
+  "name": "capture round trip -> hunter_analyze.py: car profile, 29-bit, decoder, names, health, find-signal marks",
+  "ok": true,
+  "detail": "3483 frames re-read by analyzer; test result parsed"
+ },
+ {
+  "name": "capture round trip: car recording with 29-bit + OBD + decoders via recorder, analyzer decodes values",
+  "ok": true,
+  "detail": "analyzer re-read 300 frames, decoder values and OBD summary match"
+ },
+ {
+  "name": "capture round trip: Hunter recording of real sample.txt -> analyzer frame count and signals identical",
+  "ok": true,
+  "detail": "recorder->file->analyzer: 42580 frames, same RPM/gear/wheel/counter lines as the original capture; legacy synth.txt OK"
+ },
+ {
+  "name": "serial-log (no header, old format) and 29-bit T frames in legacy raw logs still parse in analyzer",
+  "ok": true,
+  "detail": "ok"
+ },
+ {
+  "name": "reconnect + autosave + recover (cable drop mid-recording)",
+  "ok": true,
+  "detail": "drop->reconnect with markers, 28544 lines recovered from IndexedDB after \"reload\""
+ },
+ {
+  "name": "service worker: cache version bumped, file list complete, old caches purged, offline fallback",
+  "ok": true,
+  "detail": "cache hcl-v3.0, 7 files"
+ },
+ {
+  "name": "UX statics: five tabs, read-only notice, onboarding text, safe areas, reduced-motion, viewport, 44px CSS",
+  "ok": true,
+  "detail": "ok"
+ },
+ {
+  "name": "contrast: text and accent colours on the dark surfaces meet WCAG AA",
+  "ok": true,
+  "detail": "ink 13.9:1, mut 6.5:1, acc 8.6:1, ok 8.1:1, warn 9.3:1, bad 5.6:1"
+ },
+ {
+  "name": "global: every command any mock adapter received was on the allow-list (no CAN data frame ever written)",
+  "ok": true,
+  "detail": "90 commands observed, all allowed"
+ }
+]

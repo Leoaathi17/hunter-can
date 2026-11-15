@@ -30,9 +30,10 @@ function makeEnv(opts={}){
   const localStorage={getItem:k=>ls.has(k)?ls.get(k):null,setItem:(k,v)=>ls.set(k,String(v))};
   const wrote=[];const downloads=[];
   const navigator={wakeLock:{request:async()=>({})}};
+  Object.assign(navigator,opts.nav||{});
   if(opts.port){const port=opts.port;port.wrote=wrote;navigator.serial={requestPort:async()=>port,getPorts:async()=>port.down?[]:[port],addEventListener(){}};}
   const ctx=vm.createContext({document,navigator,indexedDB,localStorage,console,performance:perf,TextDecoder,TextEncoder,setTimeout,setInterval,clearInterval,clearTimeout,
-    URL:{createObjectURL:()=>"blob:x",revokeObjectURL(){}},Blob:class{constructor(p){this.p=p;}}});
+    URL:{createObjectURL:()=>"blob:x",revokeObjectURL(){}},Blob:class{constructor(p){this.p=p;}},...(opts.globals||{})});
   vm.runInContext(extractApp(),ctx,{filename:'index.html<script>'});
   const elsP=new Proxy(els,{get:(t,k)=>typeof k==='string'?(t[k]||(t[k]=mkEl())):t[k]});
   return {ctx,els:elsP,docEls,store,ls,wrote,run:c=>vm.runInContext(c,ctx),
@@ -46,10 +47,20 @@ class Port{
     this.readable={getReader(){return {async read(){await new Promise(r=>setTimeout(r,5));if(self.fail)throw new Error('device lost');
       return {value:new TextEncoder().encode(self.opened?self.gen(self):""),done:false};},releaseLock(){}};}};
     this.writable={getWriter(){return {write(b){const t=new TextDecoder().decode(b);self.wrote&&self.wrote.push(t);
-      for(const c of t.split('\r').filter(Boolean)){self.cmds.push(c);if(c==='C')self.opened=false;else if(/^S[0-8]$/.test(c))self.rate=c;else if(c==='M1')self.silent=true;else if(c==='O')self.opened=true;}
+      for(const c of t.split('\r').filter(Boolean)){self.cmds.push(c);if(c==='C')self.opened=false;else if(/^S[0-8]$/.test(c))self.rate=c;else if(c==='M1')self.silent=true;else if(c==='M0')self.silent=false;else if(c==='O'||c==='L')self.opened=true;}
       return Promise.resolve();},releaseLock(){}};}};}
   async close(){}
 }
 const hex=(n,w)=>n.toString(16).toUpperCase().padStart(w,'0');
 const frame=(id,bytes,ext)=>(ext?'T'+hex(id,8):'t'+hex(id,3))+bytes.length+bytes.map(b=>hex(b,2)).join('')+'\r';
-module.exports={makeEnv,Port,frame,hex,ROOT,extractApp};
+// Programmable serial port: handler(text,port) is called for every write; port.push(str) queues bytes for the app to read.
+class MockSerial{
+  constructor(handler,info){this.handler=handler;this.q=[];this.writes=[];this.info=info||{usbVendorId:0x16D0,usbProductId:0x117E};this.closed=false;this.opts=null;}
+  getInfo(){return this.info;}
+  push(s){this.q.push(s);}
+  async open(o){this.opts=o;this.closed=false;const self=this;
+    this.readable={getReader(){return {async read(){for(;;){if(self.closed)return {done:true};if(self.q.length)return {value:new TextEncoder().encode(self.q.shift()),done:false};await new Promise(r=>setTimeout(r,2));}},releaseLock(){}};}};
+    this.writable={getWriter(){return {write(b){const t=new TextDecoder().decode(b);self.writes.push(t);self.wrote&&self.wrote.push(t);if(self.handler)self.handler(t,self);return Promise.resolve();},releaseLock(){}};}};}
+  async close(){this.closed=true;}
+}
+module.exports={makeEnv,Port,MockSerial,frame,hex,ROOT,extractApp};
