@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.hunter.canlogger'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.hunter.canlogger'
+        minSdk 26
+        targetSdk 34
+        versionCode 2
+        versionName '2.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            // Pure-Java core (no Android imports) lives outside the Android tree so javac can build and test it alone.
+            java.srcDirs = ['src/main/java', '../core/src/main/java']
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Only for FileProvider (share/export). The USB/CDC driver, UI and JSON are hand-written, no other libraries.
+    implementation 'androidx.core:core:1.13.1'
+}
