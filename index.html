@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hunter CAN Live</title>
+<meta name="theme-color" content="#050a14">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Read-only live CAN bus viewer for motorcycles and cars (CANable SLCAN, listen-only).">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{color-scheme:dark;--bg:#050a14;--bg2:#0a1424;--glass:rgba(14,26,46,.74);--glass2:rgba(20,36,62,.8);--line:rgba(120,205,255,.17);
+--ink:#e9f4ff;--mut:#94a9c6;--acc:#22d3ee;--acc2:#2dd4bf;--ok:#34d399;--warn:#fbbf24;--bad:#ff6b6b;
+--glow:0 0 18px rgba(34,211,238,.32);--mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
+--sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(1100px 650px at 85% -10%,#0d2b46 0,transparent 60%),radial-gradient(900px 600px at -10% 110%,#082a30 0,transparent 55%),var(--bg);
+color:var(--ink);font:15px/1.4 var(--sans);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"top" "main" "nav";height:100dvh;overflow:hidden}
+[hidden]{display:none!important}
+#top{grid-area:top;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--st)) calc(12px + var(--sr)) 8px calc(12px + var(--sl));border-bottom:1px solid var(--line);background:rgba(5,10,20,.82);backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.brand svg{flex:none}.brand>div{min-width:0}
+.brand b{display:block;font-size:15px;letter-spacing:.02em;white-space:nowrap}
+.brand span{display:block;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{flex:none;display:flex;align-items:center;gap:7px;min-height:36px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--glass2);font-size:13px;white-space:nowrap}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);box-shadow:0 0 8px currentColor;color:var(--bad)}
+.chip.on .dot{background:var(--ok);color:var(--ok);animation:pulse 2.2s ease-in-out infinite}
+.chip.wait .dot{background:var(--warn);color:var(--warn)}
+.chip small{font:600 11px var(--mono);padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.08)}
+.chip small.s0{color:var(--ok)}.chip small.s1{color:var(--warn)}.chip small.s2{color:var(--bad)}
+@keyframes pulse{50%{opacity:.45}}
+main{grid-area:main;overflow:auto;padding:12px calc(12px + var(--sr)) 16px calc(12px + var(--sl));-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.panel{min-width:0;max-width:760px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+nav#tabs{grid-area:nav;display:flex;border-top:1px solid var(--line);background:rgba(5,10,20,.9);backdrop-filter:blur(12px);padding:0 var(--sr) var(--sb) var(--sl)}
+nav button{flex:1;min-height:58px;background:none;border:0;color:var(--mut);font:600 12px var(--sans);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative}
+nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button[aria-selected=true]{color:var(--acc)}
+nav button[aria-selected=true]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:2px;background:var(--acc);box-shadow:var(--glow);border-radius:2px}
+.card{background:var(--glass);border:1px solid var(--line);border-radius:16px;padding:14px;backdrop-filter:blur(10px)}
+.card h2{margin:0 0 8px;font-size:16px;font-weight:650}
+.card h3{margin:12px 0 6px;font-size:14px;font-weight:650;color:var(--ink)}
+.note{color:var(--mut);font-size:13px}
+.ro{border-color:rgba(52,211,153,.4);background:rgba(8,40,32,.55);font-size:13px}
+.ro b{color:var(--ok)}
+button,select,input,textarea{font:inherit}
+.btn{min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:rgba(34,211,238,.1);color:var(--ink);font-weight:600;font-size:15px;cursor:pointer}
+.btn.pri{background:linear-gradient(135deg,#22d3ee,#2dd4bf);color:#031318;border:0;box-shadow:var(--glow)}
+.btn.sm{min-height:44px;padding:0 12px;font-size:14px}
+.btn:disabled{opacity:.42}
+.btn.on{outline:2px solid var(--acc)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+input,select,textarea{min-height:46px;background:rgba(3,8,16,.7);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:15px;min-width:0}
+textarea{min-height:90px;font:12px var(--mono);width:100%}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut);flex:1 1 90px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.row.tight{gap:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--glass2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0}
+.tile .k{font-size:12px;color:var(--mut);display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.tile .v{font:600 26px/1.15 var(--mono);font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .v small{font:400 12px var(--sans);color:var(--mut)}
+.tag{font-size:11px;border-radius:6px;padding:1px 6px;border:1px solid var(--line)}
+.t-ok{color:var(--ok)}.t-cand{color:var(--warn)}.t-un{color:var(--warn)}
+.pill{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border-radius:99px;background:rgba(148,169,198,.14);color:var(--mut);margin:2px 4px 2px 0;font-weight:600}
+.pill.on{background:var(--ok);color:#03221a}
+/* hero */
+.hero{display:grid;gap:10px;grid-template-columns:1fr}
+.arcbox{position:relative;max-width:330px;width:100%;margin:0 auto}
+.arcbox svg{width:100%;height:auto;display:block;overflow:visible}
+.arc-track{fill:none;stroke:rgba(148,169,198,.18);stroke-width:12;stroke-linecap:round}
+.arc-val{fill:none;stroke:url(#ag);stroke-width:12;stroke-linecap:round;filter:drop-shadow(0 0 5px rgba(34,211,238,.7))}
+.arc-val.hot{stroke:var(--bad);filter:drop-shadow(0 0 5px rgba(255,107,107,.7))}
+.tick{stroke:rgba(148,169,198,.5);stroke-width:1.2}.tl{fill:var(--mut);font:10px var(--mono);text-anchor:middle}
+.arc-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:2%;pointer-events:none}
+.arc-c .big{font:700 clamp(40px,13vw,56px)/1 var(--mono);font-variant-numeric:tabular-nums;text-shadow:0 0 16px rgba(34,211,238,.45)}
+.arc-c .u{color:var(--mut);font-size:13px}
+.duo{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.duo .v{font-size:40px}
+.stale{opacity:.45}
+.bar{height:8px;border-radius:6px;background:rgba(148,169,198,.16);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:6px}
+.tbl{width:100%;border-collapse:collapse;font:12px var(--mono)}
+.tbl td,.tbl th{padding:6px 4px;text-align:left;border-bottom:1px solid rgba(120,205,255,.09)}
+.tbl th{color:var(--mut);font-weight:500}
+.tbl tr[data-k]{cursor:pointer}
+.tbl tr[data-k]:active{background:rgba(34,211,238,.08)}
+.b{display:inline-block;width:22px;text-align:center;border-radius:4px}
+.nm{color:var(--ok);font-size:11px;display:block}
+.scroll-x{overflow-x:auto}
+#log{font:11px var(--mono);color:var(--mut);max-height:130px;overflow:auto;white-space:pre-wrap;background:rgba(3,8,16,.7);border-radius:10px;padding:8px}
+details.card>summary{min-height:44px;display:flex;align-items:center;font-weight:650;font-size:16px;cursor:pointer;list-style:none}
+details.card>summary::after{content:"+";margin-left:auto;color:var(--acc);font:600 20px var(--mono)}
+details.card[open]>summary::after{content:"-"}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.seg .btn{min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.seg .btn small{font-weight:400;font-size:12px;color:var(--mut)}
+.seg .btn[aria-pressed=true]{background:linear-gradient(135deg,#22d3ee,#2dd4bf);color:#031318;box-shadow:var(--glow)}
+.seg .btn[aria-pressed=true] small{color:#05303a}
+.cb{min-height:44px;padding:0 10px;font-size:13px}
+.cb.sel{background:linear-gradient(135deg,#22d3ee,#2dd4bf);color:#031318}
+.cand{display:block;width:100%;text-align:left;margin:4px 0;min-height:44px;font:12px var(--mono);padding:8px 10px}
+.stat{display:flex;align-items:center;gap:12px}
+.stat .lvl{font:700 34px var(--mono);letter-spacing:.04em}
+.lvl.s0{color:var(--ok);text-shadow:0 0 14px rgba(52,211,153,.5)}.lvl.s1{color:var(--warn);text-shadow:0 0 14px rgba(251,191,36,.45)}.lvl.s2{color:var(--bad);text-shadow:0 0 14px rgba(255,107,107,.5)}.lvl.s9{color:var(--mut)}
+.hgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.hgrid .tile .v{font-size:22px}
+ul.plain{margin:6px 0 0;padding-left:18px;font-size:13px}
+canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:10px}
+.bits{display:inline-flex;gap:2px}.bits i{width:14px;height:20px;border-radius:3px;background:rgba(148,169,198,.12);font:11px/20px var(--mono);text-align:center;font-style:normal;color:var(--mut)}
+.bits i.t{background:rgba(34,211,238,.3);color:var(--ink)}
+.ebar{display:inline-block;height:8px;border-radius:5px;background:var(--acc);vertical-align:middle}
+.onb ol{padding-left:20px;margin:6px 0}.onb li{margin:4px 0}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + var(--sb));background:var(--glass2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:14px;max-width:90vw;z-index:9;backdrop-filter:blur(10px)}
+@media (max-width:480px){.brand>div{display:none}.chip{padding:0 10px}}
+@media (min-width:700px){.hero{grid-template-columns:1fr 1fr;align-items:center}}
+@media (orientation:landscape) and (max-height:520px){
+ body{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"top top" "nav main"}
+ nav#tabs{flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:0 0 var(--sb) var(--sl);width:calc(76px + var(--sl))}
+ nav button{min-height:56px;flex:1}
+ nav button[aria-selected=true]::before{top:22%;bottom:22%;left:0;right:auto;width:2px;height:auto}
+ .hero{grid-template-columns:1fr 1fr;align-items:center}.arcbox{max-width:250px}
+ #toast{bottom:16px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="brand">
+    <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="#22d3ee" stroke-width="2" stroke-dasharray="62 20" transform="rotate(130 16 16)"/><path d="M9 20l5-8 3 5 2-3 4 6" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div><b>Hunter CAN Live</b><span id="profLbl">Hunter 350</span></div>
+  </div>
+  <div class="chip off" id="chip" role="status" aria-live="polite"><i class="dot"></i><span id="st">Not connected</span><small id="chipHealth" class="s9" hidden>OK</small></div>
+  <button class="btn sm pri" id="bConn">Connect</button>
+</header>
+
+<main id="main">
+<!-- ========== LIVE ========== -->
+<section class="panel" data-tab="live" id="tab-live" role="tabpanel">
+  <div class="card onb" id="onb" hidden>
+    <h2>Get connected in 3 steps</h2>
+    <ol>
+      <li>Plug the CANable into the phone with an OTG cable, and its CAN-H / CAN-L into the vehicle's diagnostic or bus wiring.</li>
+      <li>Switch the ignition on (engine can stay off).</li>
+      <li>Tap <b>Connect</b> and pick the CANable in the list.</li>
+    </ol>
+    <p class="note">The app only listens. Pick your vehicle in Settings first if it is not the Hunter 350.</p>
+    <div class="row"><button class="btn pri" id="bOnbConn">Connect</button><button class="btn" id="bOnbOk">Got it</button></div>
+  </div>
+
+  <div class="hero card">
+    <div class="arcbox" aria-label="Engine speed gauge">
+      <svg viewBox="0 -10 200 186" aria-hidden="true">
+        <defs><linearGradient id="ag" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+        <g id="ticks"></g>
+        <path id="arcT" class="arc-track" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57"/>
+        <path id="arcV" class="arc-val" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" pathLength="270" stroke-dasharray="0 400"/>
+      </svg>
+      <div class="arc-c"><div class="big" id="rpm">–</div><div class="u">rpm</div></div>
+    </div>
+    <div class="duo">
+      <div class="tile"><div class="k">Speed <span class="tag" id="spdTag"></span></div><div class="v" id="spd">–</div><div class="note" id="spdU">km/h</div></div>
+      <div class="tile"><div class="k">Gear <span class="tag" id="gearTag"></span></div><div class="v" id="gear">–</div></div>
+    </div>
+  </div>
+
+  <div data-prof="hunter" class="card">
+    <h2>Hunter 350 signals</h2>
+    <div class="grid2">
+      <div class="tile"><div class="k">Wheel A km/h <span class="tag t-ok">scale ok</span></div><div class="v" id="wa">–</div></div>
+      <div class="tile"><div class="k">Wheel B km/h <span class="tag t-cand">rear? unconfirmed</span></div><div class="v" id="wb">–</div></div>
+      <div class="tile"><div class="k">0x080 B1 analog <span class="tag t-cand">candidate</span></div><div class="v" id="b1">–</div></div>
+      <div class="tile"><div class="k">0x140 counter (24-bit) <span class="tag t-cand">hypothesis</span></div><div class="v" id="ctr">–</div></div>
+      <div class="tile"><div class="k">0x211 B0 / B1 / B2 °C <span class="tag t-cand">raw-40 provisional</span></div><div class="v" id="tmp" style="font-size:20px">–</div></div>
+      <div class="tile"><div class="k">0x120 B0 MAP mbar <span class="tag t-cand">candidate</span></div><div class="v" id="map">–</div></div>
+    </div>
+    <div style="margin-top:8px"><span class="pill" id="pFb">Front brake</span><span class="pill" id="pCl">Clutch</span><span class="pill" id="pSs">Side stand</span></div>
+  </div>
+
+  <div data-prof="car custom" class="card">
+    <h2>Passive OBD-II readings</h2>
+    <p class="note" id="obdNote">Waiting for OBD responses. The app never sends requests, so values appear only if the car or another scan tool is already asking (IDs 0x7E8 to 0x7EF).</p>
+    <div class="grid2" id="obd"></div>
+  </div>
+
+  <div class="card" id="ugCard" hidden>
+    <h2>My signals</h2>
+    <div class="grid2" id="ugauges"></div>
+  </div>
+
+  <div class="card">
+    <h2>All CAN IDs</h2>
+    <p class="note">Bytes light up when they change. Tap a row to inspect it in Identify.</p>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>ID</th><th>Hz</th><th>n</th><th>B0 B1 B2 B3 B4 B5 B6 B7</th></tr></thead><tbody id="raw"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ========== RECORD ========== -->
+<section class="panel" data-tab="record" id="tab-record" role="tabpanel" hidden>
+  <div class="card">
+    <h2>Record</h2>
+    <label class="f">Label<input id="lbl" placeholder="Action label, e.g. Pass / Flash" autocomplete="off"></label>
+    <div class="row">
+      <button class="btn pri" id="bRec" disabled>Start recording</button>
+      <button class="btn" id="bMark" disabled>Mark event</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="bSave" disabled>Save file</button>
+      <button class="btn" id="bRecover">Recover last</button>
+      <button class="btn" id="bClear">Clear autosaves</button>
+    </div>
+    <div class="note" id="recInfo">Not recording.</div>
+    <p class="note">Captures autosave every 3 s. If the phone or app dies, tap Recover last. Files are plain text and open with hunter_analyze.py.</p>
+  </div>
+  <div class="card"><h2>Log</h2><div id="log" role="log"></div></div>
+</section>
+
+<!-- ========== IDENTIFY ========== -->
+<section class="panel" data-tab="identify" id="tab-identify" role="tabpanel" hidden>
+  <details class="card" open>
+    <summary>Find signal</summary>
+    <p class="note">Name what you will change, record a quiet baseline, then do the action and hold it. Bytes that differ are shown as candidates, not identifications. Only do this when parked and safe.</p>
+    <label class="f">What are you changing?<input id="wizName" placeholder="e.g. Brake pedal, A/C on" autocomplete="off"></label>
+    <div class="row">
+      <label class="f">Baseline (s)<select id="wizBase"><option>3</option><option selected>5</option><option>8</option><option>12</option></select></label>
+      <label class="f">Action (s)<select id="wizAct"><option>3</option><option selected>5</option><option>8</option><option>12</option></select></label>
+    </div>
+    <div class="row"><button class="btn pri" id="wizGo" disabled>Start find signal</button><span class="note" id="wizInfo">Connect first.</span></div>
+  </details>
+
+  <details class="card">
+    <summary>Control tests</summary>
+    <p class="note" id="ctlNote">Baseline 4 s, then event 4 s. Pick a control, then Run test.</p>
+    <div class="row tight" id="ctl"></div>
+    <div class="row"><button class="btn pri" id="bTest" disabled>Run test</button><span id="tInfo" class="note">Pick a control, then Run test.</span></div>
+    <div id="tRes" class="note" style="font-family:var(--mono);white-space:pre-wrap"></div>
+  </details>
+
+  <div class="card">
+    <h2>Candidates</h2>
+    <div id="cand" style="font:12px var(--mono)"><span class="note">Results from Find signal or Control tests appear here. Tap one to name it or turn it into a gauge.</span></div>
+    <div class="row"><input id="sigName" placeholder="Name, e.g. Horn switch (bit 3)" style="flex:1 1 180px"><button class="btn sm" id="bSig">Save name</button><button class="btn sm" id="bGauge">Make gauge</button></div>
+    <div id="sigList" class="note" style="font-family:var(--mono);white-space:pre-wrap"></div>
+  </div>
+
+  <details class="card" id="byteCard">
+    <summary>Byte view for one ID</summary>
+    <label class="f">ID<select id="selId"></select></label>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Byte</th><th>Now</th><th>Entropy</th><th>Distinct</th><th>Bits changed (7..0)</th></tr></thead><tbody id="bytes"></tbody></table></div>
+    <h3>Counter and checksum hints</h3>
+    <ul class="plain" id="hints"><li>Select an ID.</li></ul>
+    <p class="note">Hints come from the last 64 frames of that ID. They are guesses from patterns, never facts. Confirm on the vehicle before relying on them.</p>
+  </details>
+
+  <details class="card">
+    <summary>Signal decoder (my gauges)</summary>
+    <p class="note">Define where a value lives in a frame. It shows as a live gauge on Live and is saved for this vehicle profile on this phone.</p>
+    <div class="row tight">
+      <label class="f">ID (hex)<input id="dId" placeholder="7E8 or 18DAF110" autocapitalize="characters" autocomplete="off"></label>
+      <label class="f">Start byte<input id="dStart" type="number" min="0" max="7" value="0" inputmode="numeric"></label>
+      <label class="f">Length<input id="dLen" type="number" min="1" max="4" value="1" inputmode="numeric"></label>
+    </div>
+    <div class="row tight">
+      <label class="f">Endianness<select id="dEnd"><option value="be">Big (Motorola)</option><option value="le">Little (Intel)</option></select></label>
+      <label class="f">Signed<select id="dSigned"><option value="0">No</option><option value="1">Yes</option></select></label>
+      <label class="f">Scale<input id="dScale" value="1" inputmode="decimal"></label>
+      <label class="f">Offset<input id="dOff" value="0" inputmode="decimal"></label>
+    </div>
+    <div class="row tight">
+      <label class="f">Name<input id="dName" placeholder="Engine speed" autocomplete="off"></label>
+      <label class="f">Unit<input id="dUnit" placeholder="rpm, km/h, C" autocomplete="off"></label>
+      <label class="f">Gauge min<input id="dMin" placeholder="auto" inputmode="decimal"></label>
+      <label class="f">Gauge max<input id="dMax" placeholder="auto" inputmode="decimal"></label>
+    </div>
+    <p class="note">Units rpm, km/h, mph and gear also drive the main dials on Live.</p>
+    <div class="row"><button class="btn pri" id="bDecAdd">Add decoder</button></div>
+    <div id="decList"></div>
+    <h3>Generic starters (unverified)</h3>
+    <div class="row"><select id="starterSel" style="flex:1 1 200px"></select><button class="btn sm" id="bStarter">Add starter</button></div>
+    <h3>Export and import</h3>
+    <textarea id="decJson" spellcheck="false" aria-label="Decoder JSON"></textarea>
+    <div class="row"><button class="btn sm" id="bDecExp">Export JSON</button><button class="btn sm" id="bDecImp">Import from box</button><label class="btn sm" style="display:inline-flex;align-items:center">Load file<input type="file" id="decFile" accept=".json,application/json" hidden></label></div>
+  </details>
+</section>
+
+<!-- ========== HEALTH ========== -->
+<section class="panel" data-tab="health" id="tab-health" role="tabpanel" hidden>
+  <div class="card ro"><b>Read-only.</b> This app only listens. It never sends CAN data and never clears or writes ECU fault codes (DTCs), because that would require transmitting to the vehicle.</div>
+  <div class="card">
+    <div class="stat"><div class="lvl s9" id="hLvl">IDLE</div><div class="note" id="hSum">Not connected.</div></div>
+    <ul class="plain" id="hReasons"></ul>
+  </div>
+  <div class="card">
+    <h2>Bus</h2>
+    <div class="note">Bus load estimate <span id="loadTxt" style="font-family:var(--mono)">0%</span></div>
+    <div class="bar" aria-hidden="true"><i id="loadBar"></i></div>
+    <div class="hgrid" style="margin-top:10px" id="hGrid"></div>
+    <div class="row"><button class="btn sm" id="bHealthClr">Reset counters</button></div>
+  </div>
+  <div class="card">
+    <h2>Message timeline (last 30 s)</h2>
+    <p class="note">One row per ID, one cell per second. Cyan means frames arrived. Red means a periodic ID went silent.</p>
+    <canvas id="gapCv" width="380" height="40" role="img" aria-label="Per-ID message timeline"></canvas>
+    <div id="gapTxt" class="note" style="font-family:var(--mono);white-space:pre-wrap;margin-top:6px"></div>
+  </div>
+  <div class="card"><h2>Unknown IDs</h2><div id="unk" class="note" style="font-family:var(--mono)">none</div></div>
+</section>
+
+<!-- ========== SETTINGS ========== -->
+<section class="panel" data-tab="settings" id="tab-settings" role="tabpanel" hidden>
+  <div class="card">
+    <h2>Vehicle profile</h2>
+    <div class="seg" id="profPick">
+      <button class="btn" data-p="hunter" aria-pressed="true">Hunter 350<small>500k, 11-bit</small></button>
+      <button class="btn" data-p="car" aria-pressed="false">Generic car<small>500k default</small></button>
+      <button class="btn" data-p="custom" aria-pressed="false">Custom<small>you choose</small></button>
+    </div>
+    <p class="note" id="profNote"></p>
+    <div class="row tight">
+      <label class="f">Bitrate<select id="rateSel"></select></label>
+      <label class="f">ID format<select id="fmtSel"><option value="both">Show both</option><option value="11">11-bit only</option><option value="29">29-bit only</option></select></label>
+    </div>
+    <p class="note">Both 11-bit and 29-bit frames are always parsed. 29-bit IDs display as 8 hex digits. The ID format only filters what is shown and recorded.</p>
+    <div class="row"><button class="btn" id="bDetect" disabled>Auto-detect bitrate</button><span class="note" id="detInfo">Tries 500k, 250k, 125k, 1M, listen-only.</span></div>
+  </div>
+  <div class="card">
+    <h2>Connection</h2>
+    <div class="row">
+      <button class="btn pri" id="bSerial">Connect (Web Serial)</button>
+      <button class="btn" id="bUsb">Connect (WebUSB)</button>
+      <button class="btn" id="bDisc" disabled>Disconnect</button>
+    </div>
+    <p class="note">Listen-only always. The only adapter commands ever sent are C (close), S0 to S8 (bitrate), M1 (silent mode), O (open) and V (version). No CAN data frame is ever transmitted.</p>
+  </div>
+  <div class="card">
+    <h2>Saved data</h2>
+    <div class="row"><button class="btn" id="bOnbShow">Show setup guide</button><button class="btn" id="bSigClr">Forget my signal names</button></div>
+    <p class="note">Names and decoders live only on this phone, per vehicle profile.</p>
+  </div>
+  <div class="card ro"><b>Read-only.</b> Clearing or writing fault codes needs transmitting, which this app cannot do. Use a proper scan tool for that.</div>
+</section>
+</main>
+
+<nav id="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-t="live" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/></svg>Live</button>
+  <button role="tab" data-t="record" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>Record</button>
+  <button role="tab" data-t="identify" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Identify</button>
+  <button role="tab" data-t="health" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Health</button>
+  <button role="tab" data-t="settings" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Settings</button>
+</nav>
+<div id="toast" role="status" hidden></div>
+
+<script id="app">
+"use strict";
+const APP="hunter-can-live",APPV=2;
+const VID=0x16D0,PID=0x117E;
+// ---------- safety: adapter command allow-list ----------
+// Only C, S0..S8, M1, O, V. A 't'/'T' data frame, S9+, M0, etc. are rejected. Never CAN data.
+const SCODE={10:0,20:1,50:2,100:3,125:4,250:5,500:6,750:7,1000:8};
+const CMD_RE=/^(?:C|M1|O|V|S[0-8])$/;
+function cmdAllowed(c){return typeof c==="string"&&CMD_RE.test(c);}
+const ALLOWED={has:cmdAllowed};
+const CFG={detectMs:1500,prepMs:2500,cmdMs:150,settleMs:150};
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const nowMs=()=>performance.now();
+const hex2=b=>b.toString(16).toUpperCase().padStart(2,"0");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clean=s=>String(s==null?"":s).replace(/[\x00-\x1f\x7f]/g," ").replace(/\s+/g," ").trim().slice(0,60);
+function lsGet(k,def){try{const v=localStorage.getItem(k);return v==null?def:JSON.parse(v);}catch(e){return def;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+const logEl=$("log");
+function log(m){logEl.textContent+=new Date().toLocaleTimeString()+"  "+m+"\n";if(logEl.textContent.length>20000)logEl.textContent=logEl.textContent.slice(-12000);logEl.scrollTop=logEl.scrollHeight;}
+let toastT=null;
+function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true;},3500);log(m);}
+
+// ---------- profiles ----------
+const PROFILES={
+  hunter:{id:"hunter",name:"Hunter 350",bitrate:500,note:"Royal Enfield Hunter 350 decoders. 500 kbps, 11-bit IDs.",known:[0x80,0x100,0x120,0x12B,0x140,0x150,0x211,0x280,0x290,0x450]},
+  car:{id:"car",name:"Generic car",bitrate:500,note:"No vehicle-specific decoders. Passive OBD-II readings and your own signals. Most cars use 500 kbps; some use 250 or 125."},
+  custom:{id:"custom",name:"Custom",bitrate:500,note:"Pick any bitrate and ID format. Passive OBD-II readings and your own signals."}
+};
+let cfg=lsGet("hcl.cfg",null);
+if(!cfg||!PROFILES[cfg.profile])cfg={profile:"hunter",rate:{hunter:500,car:500,custom:500},fmt:{hunter:"both",car:"both",custom:"both"}};
+cfg.rate=Object.assign({hunter:500,car:500,custom:500},cfg.rate);cfg.fmt=Object.assign({hunter:"both",car:"both",custom:"both"},cfg.fmt);
+const saveCfg=()=>lsSet("hcl.cfg",cfg);
+const prof=()=>PROFILES[cfg.profile];
+const curRate=()=>(SCODE[cfg.rate[cfg.profile]]!==undefined?cfg.rate[cfg.profile]:500);
+const curFmt=()=>cfg.fmt[cfg.profile]||"both";
+const isHunter=()=>cfg.profile==="hunter";
+
+// ---------- state ----------
+const ids=new Map(); // key -> per-ID stats. key = id (11-bit) or id+2^32 (29-bit)
+const EXT=4294967296;
+const keyOf=(id,ext)=>ext?id+EXT:id;
+const idNum=k=>k>=EXT?k-EXT:k;
+const idStr=k=>k>=EXT?"0x"+idNum(k).toString(16).toUpperCase().padStart(8,"0"):"0x"+k.toString(16).toUpperCase();
+const capId=k=>k>=EXT?idNum(k).toString(16).toUpperCase().padStart(8,"0"):k.toString(16).toUpperCase().padStart(3,"0");
+let rec=null,saved=null,wake=null,link=null;
+let lastFrameAt=0,connAt=0,detecting=false;
+const FR={total:0};
+const H={bad:0,resync:0,bel:0,overflow:0,stale:0,ctrJump:0,dlcOdd:0,filtered:0,rtr:0,obdReq:0,dtcResp:0,unknown:new Map()};
+const L={bits:0,t:0,load:0};
+const OBD=new Map(); // pid -> {v,t,def,ecu}
+const UV=new Map(); // decoder uid -> {v,t,lo,hi}
+let twin=null;
+function resetLive(){
+  ids.clear();OBD.clear();UV.clear();FR.total=0;lastFrameAt=0;buf="";
+  for(const k of Object.keys(H))if(k!=="unknown")H[k]=0;H.unknown.clear();L.bits=0;L.t=0;L.load=0;
+}
+
+// ---------- user-named signals (per profile) ----------
+let SIG={};
+function loadSig(){
+  let s=lsGet("hcl.sig."+cfg.profile,null);
+  if(s==null&&isHunter())s=lsGet("hunterSignals",{});
+  SIG=(s&&typeof s==="object")?s:{};
+}
+function saveSig(){lsSet("hcl.sig."+cfg.profile,SIG);}
+const KNOWN={"0x100 B4":"RPM (high byte)","0x100 B5":"RPM (low byte)","0x150 B0":"Gear","0x12B B0":"Wheel A speed (hi)","0x12B B1":"Wheel A speed (lo)","0x12B B2":"Wheel B speed (hi)","0x12B B3":"Wheel B speed (lo)","0x80 B0":"Front brake (bit0)","0x80 B7":"Clutch bit2 / side stand bit5","0x80 B1":"analog (candidate)","0x140 B1":"counter hi","0x140 B2":"counter mid","0x140 B3":"counter lo"};
+const sigKey=(k,i)=>idStr(k)+" B"+i;
+const sigKeys=()=>Object.keys(SIG).filter(k=>/^0x[0-9A-F]+ B\d$/.test(k));
+
+// ---------- passive OBD-II (standard SAE J1979 mode 01 formulas; decode only, never request) ----------
+const OBDP={
+  0x04:{n:"Engine load",u:"%",l:1,f:a=>a*100/255},
+  0x05:{n:"Coolant temp",u:"°C",l:1,f:a=>a-40},
+  0x0B:{n:"Intake MAP",u:"kPa",l:1,f:a=>a},
+  0x0C:{n:"Engine speed",u:"rpm",l:2,f:(a,b)=>(a*256+b)/4},
+  0x0D:{n:"Vehicle speed",u:"km/h",l:1,f:a=>a},
+  0x0F:{n:"Intake air temp",u:"°C",l:1,f:a=>a-40},
+  0x10:{n:"MAF rate",u:"g/s",l:2,f:(a,b)=>(a*256+b)/100},
+  0x11:{n:"Throttle",u:"%",l:1,f:a=>a*100/255},
+  0x2F:{n:"Fuel level",u:"%",l:1,f:a=>a*100/255},
+  0x42:{n:"Module voltage",u:"V",l:2,f:(a,b)=>(a*256+b)/1000},
+  0x46:{n:"Ambient temp",u:"°C",l:1,f:a=>a-40},
+  0x5C:{n:"Oil temp",u:"°C",l:1,f:a=>a-40}
+};
+function obdFrame(id,d,now){
+  // single-frame ISO-TP responses only: [len, 0x41, pid, A, B...]
+  if(d.length>=3&&d[0]>=2&&d[0]<=7){
+    if(d[1]===0x41){const def=OBDP[d[2]];if(def&&d.length>=3+def.l&&d[0]>=2+def.l){OBD.set(d[2],{v:def.f(d[3],d[4]||0),t:now,def,ecu:id});}}
+    else if(d[1]===0x43)H.dtcResp++; // another tool is reading stored codes; only counted, not decoded
+  }
+}
+
+// ---------- user-defined decoders ----------
+let DEC=[],DECBY=new Map(),uidN=0;
+function sanitizeDec(o){
+  if(!o||typeof o!=="object")return null;
+  const idt=String(o.id==null?"":o.id).replace(/^0x/i,"").trim().toUpperCase();
+  if(!/^[0-9A-F]{1,8}$/.test(idt))return null;
+  const idn=parseInt(idt,16);const ext=idt.length>3||o.ext===true;
+  if(ext?idn>0x1FFFFFFF:idn>0x7FF)return null;
+  const start=+o.start,len=+o.len;
+  if(!Number.isInteger(start)||!Number.isInteger(len)||start<0||start>7||len<1||len>4||start+len>8)return null;
+  const scale=+o.scale,offset=+o.offset;
+  if(!isFinite(scale)||!isFinite(offset))return null;
+  const num=v=>(v===null||v===undefined||v===""||!isFinite(+v))?null:+v;
+  return {id:idn.toString(16).toUpperCase(),ext,start,len,endian:o.endian==="le"?"le":"be",signed:!!(+o.signed),scale,offset,
+    unit:clean(o.unit).replace(/\s+/g,"").slice(0,8),name:clean(o.name)||"Signal",min:num(o.min),max:num(o.max),unverified:!!o.unverified};
+}
+function decodeSignal(d,data){
+  if(!data||data.length<d.start+d.len)return null;
+  let raw=0;
+  if(d.endian==="be"){for(let i=0;i<d.len;i++)raw=raw*256+data[d.start+i];}
+  else{for(let i=d.len-1;i>=0;i--)raw=raw*256+data[d.start+i];}
+  if(d.signed){const m=Math.pow(2,8*d.len);if(raw>=m/2)raw-=m;}
+  return raw*d.scale+d.offset;
+}
+const decKey=d=>keyOf(parseInt(d.id,16),d.ext);
+function indexDec(){DECBY=new Map();for(const d of DEC){const k=decKey(d);if(!DECBY.has(k))DECBY.set(k,[]);DECBY.get(k).push(d);}}
+function loadDec(){
+  const a=lsGet("hcl.dec."+cfg.profile,[]);DEC=[];
+  if(Array.isArray(a))for(const o of a){const d=sanitizeDec(o);if(d){d.uid=++uidN;DEC.push(d);}}
+  indexDec();
+}
+const stripDec=d=>{const o=Object.assign({},d);delete o.uid;return o;};
+function saveDec(){lsSet("hcl.dec."+cfg.profile,DEC.map(stripDec));indexDec();renderDecList();buildUG();}
+function addDec(o){const d=sanitizeDec(o);if(!d)return null;d.uid=++uidN;DEC.push(d);saveDec();return d;}
+const STARTERS=[
+  {label:"OBD engine speed (7E8, PID 0C)",d:{id:"7E8",start:3,len:2,endian:"be",scale:0.25,offset:0,unit:"rpm",name:"OBD engine speed",min:0,max:8000}},
+  {label:"OBD vehicle speed (7E8, PID 0D)",d:{id:"7E8",start:3,len:1,endian:"be",scale:1,offset:0,unit:"km/h",name:"OBD vehicle speed",min:0,max:240}},
+  {label:"OBD coolant temp (7E8, PID 05)",d:{id:"7E8",start:3,len:1,endian:"be",scale:1,offset:-40,unit:"C",name:"OBD coolant temp",min:-40,max:130}},
+  {label:"OBD throttle (7E8, PID 11)",d:{id:"7E8",start:3,len:1,endian:"be",scale:0.392157,offset:0,unit:"%",name:"OBD throttle",min:0,max:100}},
+  {label:"Blank 16-bit big-endian value",d:{id:"000",start:0,len:2,endian:"be",scale:1,offset:0,unit:"",name:"My 16-bit value"}},
+  {label:"Blank 16-bit little-endian value",d:{id:"000",start:0,len:2,endian:"le",scale:1,offset:0,unit:"",name:"My 16-bit value (LE)"}}
+];
+// ---------- bus health ----------
+function bumpBucket(s,now){const sec=Math.floor(now/1000),i=sec%60;if(s.bkSec[i]!==sec){s.bkSec[i]=sec;s.bk[i]=0;}s.bk[i]++;}
+function bucket(s,sec){const i=((sec%60)+60)%60;return s.bkSec[i]===sec?s.bk[i]:0;}
+function loadTick(now){
+  if(!L.t){L.t=now;return;}
+  const dt=now-L.t;
+  if(dt>=1000){L.load=Math.min(1.5,L.bits*1000/dt/(curRate()*1000));L.bits=0;L.t=now;}
+}
+function frameBits(ext,n){return ((ext?54:34)+8*n)*1.2+13;} // estimate incl. ~20% stuffing
+function mkStats(key,now){
+  return {key,n:0,last:null,t0:now,hz:0,wn:0,wt:now,ch:new Array(8).fill(0),cnt:new Array(8).fill(0),
+    hist:Array.from({length:8},()=>new Uint32Array(256)),tog:new Uint32Array(64),ring:[],
+    bkSec:new Int32Array(60).fill(-1),bk:new Uint16Array(60),per:0,gapN:0,gapMax:0,gapAt:0,seenAt:0,firstSec:Math.floor(now/1000)};
+}
+function onFrame(id,ext,data){
+  const now=nowMs();
+  FR.total++;
+  if((curFmt()==="11"&&ext)||(curFmt()==="29"&&!ext)){H.filtered++;return;}
+  const key=keyOf(id,ext);
+  let s=ids.get(key);
+  if(!s){s=mkStats(key,now);ids.set(key,s);}
+  loadTick(now);L.bits+=frameBits(ext,data.length);
+  lastFrameAt=now;s.n++;s.wn++;
+  if(s.seenAt){
+    const dt=now-s.seenAt,thr=Math.max(1000,5*s.per);
+    if(s.n>6&&dt>thr){s.gapN++;if(dt>s.gapMax)s.gapMax=dt;s.gapAt=now;H.stale++;}
+    else s.per=s.per?s.per*.9+dt*.1:dt;
+  }
+  s.seenAt=now;bumpBucket(s,now);
+  const kn=prof().known;
+  if(kn&&!kn.includes(key)&&!SIG["id:"+key]){H.unknown.set(key,(H.unknown.get(key)||0)+1);}
+  if(kn&&data.length<8&&kn.includes(key))H.dlcOdd++;
+  if(isHunter()&&key===0x140&&data.length>=4){const v=data[1]<<16|data[2]<<8|data[3];if(s.ctr!=null){const dv=(v-s.ctr)&0xFFFFFF;if(dv>8)H.ctrJump++;}s.ctr=v;}
+  for(let i=0;i<data.length;i++)s.hist[i][data[i]]++;
+  if(s.last){const m=Math.min(s.last.length,data.length);for(let i=0;i<m;i++){const x=s.last[i]^data[i];if(x){s.ch[i]=now;s.cnt[i]++;for(let b=0;b<8;b++)if(x>>b&1)s.tog[i*8+b]++;}}}
+  s.last=data;s.ring.push(data);if(s.ring.length>64)s.ring.shift();
+  if(now-s.wt>=1000){s.hz=s.wn*1000/(now-s.wt);s.wn=0;s.wt=now;}
+  if(!ext){
+    if(id>=0x7E8&&id<=0x7EF)obdFrame(id,data,now);
+    else if(id===0x7DF||(id>=0x7E0&&id<=0x7E7))H.obdReq++;
+  }
+  const ds=DECBY.get(key);
+  if(ds)for(const d of ds){const v=decodeSignal(d,data);if(v!=null){let u=UV.get(d.uid);if(!u){u={lo:v,hi:v};UV.set(d.uid,u);}u.v=v;u.t=now;if(v<u.lo)u.lo=v;if(v>u.hi)u.hi=v;}}
+  if(twin)twin.push([key,data]);
+  if(rec)rec.lines.push(((now-rec.start)/1000).toFixed(4)+" "+capId(key)+" "+data.length+" "+[...data].map(hex2).join(" "));
+}
+
+// ---------- SLCAN stream parser (11-bit 't' and 29-bit 'T') ----------
+let buf="";
+const FR_RE=/^(?:t([0-9A-F]{3})|T([0-9A-F]{8}))([0-8])([0-9A-F]*)$/;
+function parseSeg(seg){
+  const m=FR_RE.exec(seg);if(!m)return null;
+  const n=+m[3];if(m[4].length!==2*n)return null;
+  const d=new Uint8Array(n);for(let k=0;k<n;k++)d[k]=parseInt(m[4].substr(k*2,2),16);
+  return {id:parseInt(m[1]||m[2],16),ext:!!m[2],data:d};
+}
+function feed(text){
+  const nb=(text.match(/\x07/g)||[]).length; // adapter error beeps arrive alone, count them at once
+  if(nb){H.bel+=nb;text=text.replace(/\x07/g,"");}
+  buf+=text;
+  let i;
+  while((i=buf.indexOf("\r"))>=0){
+    let seg=buf.slice(0,i);buf=buf.slice(i+1);
+    if(!seg.length)continue;
+    let f=parseSeg(seg);
+    if(f){onFrame(f.id,f.ext,f.data);continue;}
+    if(/^[rR][0-9A-F]{3,8}[0-8]$/.test(seg)){H.rtr++;continue;}      // remote frames: counted, ignored
+    if(/^[Vv][0-9A-Za-z]*$/.test(seg)||/^N[0-9A-Za-z]*$/.test(seg))continue; // adapter replies
+    // resync: junk glued to a frame, or two frames glued together
+    const toks=seg.match(/[tT][0-9A-F]*/g)||[];let got=0;
+    for(const t of toks){const g=parseSeg(t);if(g){onFrame(g.id,g.ext,g.data);got++;}}
+    if(got)H.resync++;else H.bad++;
+  }
+  if(buf.length>4096){buf="";H.overflow++;}
+}
+
+// ---------- transport ----------
+let lastKind=null,userDisc=false,reconnecting=false;
+function mkEvent(t){if(rec)rec.lines.push("# "+t+" "+((nowMs()-rec.start)/1000).toFixed(3));}
+function handleDrop(){
+  if(userDisc||!link)return;
+  link=null;buf="";setConn(false);
+  mkEvent("DISCONNECT");log("Link lost. Will keep trying to reconnect.");
+  startReconnect();
+}
+async function connectSerial(port){
+  if(!("serial" in navigator)){log("Web Serial not available in this browser.");return;}
+  if(!port)port=await navigator.serial.requestPort({filters:[{usbVendorId:VID,usbProductId:PID}]});
+  await port.open({baudRate:115200});
+  const writer=port.writable.getWriter();const enc=new TextEncoder();
+  let alive=true;
+  const me={write:s=>writer.write(enc.encode(s)),
+    close:async()=>{alive=false;try{writer.releaseLock();}catch(e){}try{await port.close();}catch(e){}}};
+  (async()=>{
+    const dec=new TextDecoder();
+    while(alive&&port.readable){
+      const reader=port.readable.getReader();
+      try{for(;;){const {value,done}=await reader.read();if(done)break;feed(dec.decode(value,{stream:true}));}}
+      catch(e){if(alive)log("read: "+e.message);}
+      finally{try{reader.releaseLock();}catch(e){}}
+      break;
+    }
+    if(alive&&link===me){alive=false;try{await port.close();}catch(e){}handleDrop();}
+  })();
+  link=me;
+  log("Web Serial opened.");
+}
+async function connectUsb(dev){
+  if(!("usb" in navigator)){log("WebUSB not available in this browser.");return;}
+  if(!dev)dev=await navigator.usb.requestDevice({filters:[{vendorId:VID,productId:PID}]});
+  await dev.open();
+  if(dev.configuration===null)await dev.selectConfiguration(1);
+  for(const n of [0,1]){try{await dev.claimInterface(n);}catch(e){log("claim "+n+": "+e.message);}}
+  try{await dev.controlTransferOut({requestType:"class",recipient:"interface",request:0x22,value:0x01,index:0});}catch(e){log("DTR: "+e.message);}
+  const enc=new TextEncoder(),dec=new TextDecoder();let alive=true;
+  const me={write:s=>dev.transferOut(1,enc.encode(s)),
+    close:async()=>{alive=false;try{await dev.close();}catch(e){}}};
+  (async()=>{
+    while(alive){
+      try{const r=await dev.transferIn(1,64);if(r.status==="ok"&&r.data)feed(dec.decode(r.data,{stream:true}));}
+      catch(e){if(alive)log("read: "+e.message);break;}
+    }
+    if(alive&&link===me){alive=false;try{await dev.close();}catch(e){}handleDrop();}
+  })();
+  link=me;
+  log("WebUSB opened.");
+}
+// The ONLY function that writes to the adapter.
+async function tx(cmd){
+  if(!cmdAllowed(cmd))throw new Error("blocked command "+JSON.stringify(cmd));
+  if(!link)throw new Error("not connected");
+  await link.write(cmd+"\r");
+}
+async function setup(kbps){
+  const rate=kbps||curRate();const sc=SCODE[rate];
+  if(sc===undefined)throw new Error("unsupported bitrate "+rate);
+  for(const c of ["C","S"+sc,"M1","O"]){await tx(c);await sleep(CFG.cmdMs);}
+  log("Configured: "+rate+" kbps, listen-only, open.");
+}
+async function go(kind,fn){
+  lastKind=kind;userDisc=false;buf="";
+  try{await fn();await setup();connAt=nowMs();setConn(true);
+    try{wake=await navigator.wakeLock.request("screen");}catch(e){}
+  }catch(e){log("Connect failed: "+e.message);if(link){try{await link.close();}catch(_){}link=null;}setConn(false);}
+}
+async function startReconnect(){
+  if(reconnecting)return;reconnecting=true;setConn(false);
+  while(!link&&!userDisc){
+    try{
+      if(lastKind==="serial"&&"serial" in navigator){
+        const ps=(await navigator.serial.getPorts()).filter(p=>{const i=p.getInfo();return i.usbVendorId===VID&&i.usbProductId===PID;});
+        if(ps.length){await connectSerial(ps[0]);await setup();connAt=nowMs();reconnecting=false;setConn(true);mkEvent("RECONNECT");log("Reconnected.");return;}
+      }else if(lastKind==="usb"&&"usb" in navigator){
+        const ds=(await navigator.usb.getDevices()).filter(d=>d.vendorId===VID&&d.productId===PID);
+        if(ds.length){await connectUsb(ds[0]);await setup();connAt=nowMs();reconnecting=false;setConn(true);mkEvent("RECONNECT");log("Reconnected.");return;}
+      }
+    }catch(e){if(link){try{await link.close();}catch(_){}link=null;}}
+    await sleep(2000);
+  }
+  reconnecting=false;setConn(false);
+}
+try{
+  if("serial" in navigator)navigator.serial.addEventListener("connect",()=>{if(lastKind==="serial"&&!link&&!userDisc)startReconnect();});
+  if("usb" in navigator)navigator.usb.addEventListener("connect",()=>{if(lastKind==="usb"&&!link&&!userDisc)startReconnect();});
+}catch(e){}
+async function disconnect(){
+  userDisc=true;if(link){try{await tx("C");}catch(e){}try{await link.close();}catch(e){}link=null;}
+  reconnecting=false;setConn(false);mkEvent("USER_DISCONNECT");log("Disconnected.");
+}
+function defaultKind(){return ("serial" in navigator)?"serial":"usb";}
+function connectDefault(){if(link||reconnecting)return;return defaultKind()==="serial"?go("serial",()=>connectSerial()):go("usb",()=>connectUsb());}
+function setConn(on){
+  $("bSerial").disabled=on||reconnecting;$("bUsb").disabled=on||reconnecting;$("bDisc").disabled=!(on||reconnecting);
+  $("bRec").disabled=!on&&!rec;$("bMark").disabled=!rec;
+  $("bTest").disabled=!(on&&selCtl&&!testing);$("wizGo").disabled=!(on&&!testing);$("bDetect").disabled=!on||!!rec||detecting;
+  $("wizInfo").textContent=on?"Ready.":"Connect first.";
+  $("bConn").textContent=(on||reconnecting)?"Disconnect":"Connect";
+  if(!on&&!reconnecting)link=null;
+  renderChip();
+}
+function renderChip(){
+  const chip=$("chip"),t=$("st"),ch=$("chipHealth");
+  const now=nowMs();
+  if(link){
+    const quiet=(!lastFrameAt||now-lastFrameAt>3000)&&now-connAt>3000;
+    t.textContent=prof().name.split(" ")[0]+" · "+(quiet?"no data":curRate()+"k");chip.className="chip "+(quiet?"wait":"on");chip.setAttribute("aria-label","Connected to "+prof().name+" at "+curRate()+" kbps"+(quiet?", no data":""));
+    const s=status(now);ch.hidden=false;ch.textContent=["OK","WARN","CHECK"][s.lvl];ch.className="s"+s.lvl;
+  }else if(reconnecting){t.textContent="Reconnecting...";chip.className="chip wait";chip.setAttribute("aria-label","Reconnecting");ch.hidden=true;}
+  else{t.textContent="Not connected";chip.className="chip off";chip.setAttribute("aria-label","Not connected");ch.hidden=true;}
+}
+$("bSerial").onclick=()=>go("serial",()=>connectSerial());
+$("bUsb").onclick=()=>go("usb",()=>connectUsb());
+$("bDisc").onclick=disconnect;
+$("bConn").onclick=()=>{if(link||reconnecting)disconnect();else connectDefault();};
+
+// ---------- auto-detect bitrate (listen-only, never transmits data) ----------
+const DETECT_ORDER=[500,250,125,1000];
+async function autoDetect(){
+  if(!link){toast("Connect first.");return null;}
+  if(rec){toast("Stop recording before auto-detect.");return null;}
+  if(detecting)return null;
+  detecting=true;setConn(!!link);
+  const prev=curRate();let found=null;
+  try{
+    for(const k of DETECT_ORDER){
+      $("detInfo").textContent="Trying "+k+" kbps...";
+      await setup(k);
+      await sleep(CFG.settleMs);
+      const f0=FR.total,b0=H.bel,x0=H.bad+H.overflow;
+      await sleep(CFG.detectMs);
+      const f=FR.total-f0,b=H.bel-b0,x=H.bad+H.overflow-x0;
+      if(f>=3&&b===0&&x<=f*0.05){found=k;break;}
+    }
+    if(found){
+      cfg.rate[cfg.profile]=found;saveCfg();resetLive();buildRateSel();
+      $("detInfo").textContent="Found "+found+" kbps. Frames arrive with no error beeps.";toast("Bitrate set to "+found+" kbps.");
+    }else{
+      try{await setup(prev);}catch(e){}
+      $("detInfo").textContent="No clean traffic at 500k, 250k, 125k or 1M. Check wiring, ignition and termination.";toast("Auto-detect found no valid bitrate.");
+    }
+  }catch(e){log("Auto-detect error: "+e.message);}
+  detecting=false;setConn(!!link);
+  return found;
+}
+$("bDetect").onclick=autoDetect;
+
+// ---------- recording + autosave ----------
+function safeName(s){return (s||"capture").trim().replace(/[^A-Za-z0-9._-]+/g,"_").replace(/^_+|_+$/g,"")||"capture";}
+function headerLines(label,t0){
+  const p=prof();const h=[];
+  h.push("# Hunter live capture, label: "+clean(label)+", started "+t0.toISOString());
+  h.push("# APP "+APP+" "+APPV);
+  h.push("# PROFILE id="+p.id+" name="+p.name.replace(/\s+/g,"_")+" bitrate="+(curRate()*1000)+" idfmt="+curFmt()+" listen_only=1");
+  for(const k of sigKeys())h.push("# SIGNAL "+k+" = "+clean(SIG[k]));
+  for(const d of DEC)h.push(decHeader(d));
+  return h;
+}
+function decHeader(d){
+  return "# SIGNAL 0x"+(d.ext?d.id.padStart(8,"0"):d.id)+" B"+d.start+"+"+d.len+" "+(d.endian==="le"?"LE":"BE")+" signed="+(d.signed?1:0)+" scale="+d.scale+" offset="+d.offset+" unit="+(d.unit||"-")+(d.unverified?" unverified=1":"")+" = "+d.name;
+}
+let db=null,idbWarned=false;
+function idb(){return new Promise((res,rej)=>{if(db)return res(db);
+  const r=indexedDB.open("hunterlive",1);
+  r.onupgradeneeded=()=>{r.result.createObjectStore("chunks");r.result.createObjectStore("meta");};
+  r.onsuccess=()=>{db=r.result;res(db);};r.onerror=()=>rej(r.error);});}
+async function idbPut(store,key,val){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction(store,"readwrite");t.objectStore(store).put(val,key);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function idbAll(store){const d=await idb();return new Promise((res,rej)=>{const o={};const q=d.transaction(store,"readonly").objectStore(store).openCursor();
+  q.onsuccess=()=>{const c=q.result;if(c){o[c.key]=c.value;c.continue();}else res(o);};q.onerror=()=>rej(q.error);});}
+async function idbClear(){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction(["chunks","meta"],"readwrite");t.objectStore("chunks").clear();t.objectStore("meta").clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function flush(r){
+  if(!r)return;
+  try{
+    const part=r.lines.slice(r.flushed);
+    if(part.length){await idbPut("chunks",r.sid+":"+String(r.chunk).padStart(6,"0"),part);r.chunk++;r.flushed+=part.length;}
+    await idbPut("meta",r.sid,{label:r.label,t0:r.t0.toISOString(),lines:r.flushed,profile:cfg.profile});
+  }catch(e){if(!idbWarned){idbWarned=true;log("Autosave unavailable: "+e.message);}}
+}
+setInterval(()=>flush(rec),3000);
+function healthLine(){return "# HEALTH bad="+H.bad+" resync="+H.resync+" bel="+H.bel+" overflow="+H.overflow+" gaps="+H.stale+" ctrjump="+H.ctrJump+" load="+Math.round(L.load*100)+" filtered="+H.filtered;}
+$("bRec").onclick=async()=>{
+  if(!rec){
+    const t0=new Date();
+    rec={label:$("lbl").value||"capture",start:nowMs(),lines:[],t0,sid:t0.toISOString(),flushed:0,chunk:0,prof:cfg.profile};
+    for(const l of headerLines(rec.label,t0))rec.lines.push(l);
+    $("bRec").textContent="Stop recording";$("bMark").disabled=false;$("bSave").disabled=true;$("bDetect").disabled=true;
+    $("profPick").dataset.locked="1";
+  }else{
+    const r=rec;r.stopped=true;r.lines.push(healthLine());
+    $("bRec").textContent="Start recording";$("bSave").disabled=false;$("bMark").disabled=true;
+    saved=r;rec=null;delete $("profPick").dataset.locked;$("bDetect").disabled=!link;await flush(r);
+  }
+};
+$("bMark").onclick=()=>{if(rec){const t=((nowMs()-rec.start)/1000).toFixed(3);rec.lines.push("# MARK "+t+" "+clean($("lbl").value||"event"));log("Marked at "+t+" s");}};
+function download(r){
+  const stamp=r.t0.toISOString().replace(/[-:]/g,"").slice(0,15);
+  const blob=new Blob([r.lines.join("\n")+"\n"],{type:"text/plain"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="hunter_"+safeName(r.label)+"_"+stamp+".txt";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  log("Saved "+a.download+" ("+r.lines.length+" lines)");
+}
+$("bSave").onclick=()=>{if(saved)download(saved);};
+$("bRecover").onclick=async()=>{
+  try{
+    const meta=await idbAll("meta"),chunks=await idbAll("chunks");
+    const sids=Object.keys(meta).sort();
+    if(!sids.length){log("No autosaved capture found.");return;}
+    const sid=sids[sids.length-1];
+    const keys=Object.keys(chunks).filter(k=>k.startsWith(sid+":")).sort();
+    const lines=[].concat(...keys.map(k=>chunks[k]));
+    saved={label:(meta[sid].label||"capture")+"_recovered",t0:new Date(meta[sid].t0),lines};
+    $("bSave").disabled=false;log("Recovered "+lines.length+" lines from "+sid+". Tap Save file.");
+  }catch(e){log("Recover failed: "+e.message);}
+};
+$("bClear").onclick=async()=>{try{await idbClear();log("Autosaves cleared.");}catch(e){log("Clear failed: "+e.message);}};
+
+// ---------- identification ----------
+const BIKE_CTL=["Front Brake","Rear Brake","Clutch","Side Stand","Kill Switch","Starter Button","Horn","High Beam","Low Beam","Pass / Flash","Left Indicator","Right Indicator","Hazard","Throttle","Gear","Ignition"];
+const CAR_CTL=["Brake Pedal","Clutch Pedal","Accelerator","Handbrake","Reverse Gear","Horn","High Beam","Low Beam","Left Indicator","Right Indicator","Hazard","Wipers","Driver Door","Seat Belt","Window Switch","Ignition"];
+let selCtl=null,testing=false;
+function buildControls(){
+  const el=$("ctl");el.innerHTML="";selCtl=null;
+  (isHunter()?BIKE_CTL:CAR_CTL).forEach(c=>{const b=document.createElement("button");b.className="btn cb";b.textContent=c;
+    b.onclick=()=>{if(testing)return;selCtl=c;$("lbl").value=c;[...el.children].forEach(x=>x.classList.toggle("sel",x===b));$("tInfo").textContent="Selected: "+c;$("bTest").disabled=!link;};
+    el.appendChild(b);});
+}
+function mk(t){if(rec){const s=((nowMs()-rec.start)/1000).toFixed(3);rec.lines.push("# MARK "+s+" "+clean(t));}}
+function stats(w){const m=new Map();for(const [id,d] of w){let a=m.get(id);if(!a){a=[];m.set(id,a);}a.push(d);}return m;}
+function compare(base,ev){
+  const B=stats(base),E=stats(ev),out=[];
+  for(const id of new Set([...B.keys(),...E.keys()])){
+    const bl=B.get(id)||[],el=E.get(id)||[];if(!bl.length||!el.length)continue;
+    for(let i=0;i<8;i++){
+      const bv=bl.map(d=>d[i]||0),ev2=el.map(d=>d[i]||0);
+      const bs=new Set(bv),es=new Set(ev2);
+      const mn=a=>Math.min(...a),mx=a=>Math.max(...a),mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+      if([...bs].some(v=>!es.has(v))||[...es].some(v=>!bs.has(v))){
+        const sym=[...bs].filter(v=>!es.has(v)).length+[...es].filter(v=>!bs.has(v)).length;
+        const noisy=bs.size>8;
+        let score=sym*10+Math.abs(mean(ev2)-mean(bv))+(mx(ev2)-mn(ev2));if(noisy)score=Math.min(score*0.1,10);
+        const ones=a=>a.reduce((x,y)=>x&y,255),zeros=a=>~a.reduce((x,y)=>x|y,0)&255;
+        const bits=((ones(bv)&zeros(ev2))|(zeros(bv)&ones(ev2)))&255;
+        out.push({score,id,i,bs:[...bs].slice(0,5),es:[...es].slice(0,5),bits,noisy});
+      }
+    }
+  }
+  out.sort((a,b)=>b.score-a.score);return out.slice(0,12);
+}
+async function countdown(msg,sec,infoId){for(let s=sec;s>0;s--){$(infoId).textContent=msg+" "+s+" s";await sleep(1000);}}
+// One baseline-vs-action run, shared by Control tests and Find signal.
+async function runWindows(name,baseSec,actSec,infoId){
+  const started=!rec;if(started)await $("bRec").onclick();
+  mk("BASELINE start "+name);twin=[];
+  await countdown("BASELINE: leave "+name+" in its NORMAL state.",baseSec,infoId);
+  const base=twin;mk("EVENT prepare "+name);twin=null;
+  $(infoId).textContent="Get ready: operate "+name+" and HOLD it in that state...";await sleep(CFG.prepMs);
+  mk("EVENT start "+name);twin=[];
+  await countdown("ACTION: hold "+name+" operated.",actSec,infoId);
+  const ev=twin;twin=null;mk("EVENT end "+name);
+  if(started)await $("bRec").onclick();
+  return compare(base,ev);
+}
+function candText(r){return sigKey(r.id,r.i)+"  "+r.bs.map(hex2).join(",")+" -> "+r.es.map(hex2).join(",")+"  bits 0x"+hex2(r.bits)+(r.noisy?"  (noisy in baseline)":"");}
+async function runTest(name,baseSec,actSec,infoId,resEl){
+  testing=true;setConn(!!link);
+  let res=[];
+  try{res=await runWindows(name,baseSec,actSec,infoId);}catch(e){log("Test error: "+e.message);}
+  const shown=isHunter()?res.filter(r=>r.id!==0x140):res;
+  if(resEl)$(resEl).textContent="RESULT: "+name+" (candidates, not identifications)\n"+(shown.length?shown.map(candText).join("\n"):"No byte changed. Try again.");
+  showCand(shown);
+  $(infoId).textContent="Done. Open Candidates below to name a result.";
+  testing=false;setConn(!!link);
+  return shown;
+}
+$("bTest").onclick=()=>{if(testing||!selCtl||!link)return;return runTest(selCtl,4,4,"tInfo","tRes");};
+$("wizGo").onclick=()=>{
+  if(testing||!link)return;const nm=clean($("wizName").value);
+  if(!nm){$("wizInfo").textContent="Type what you are changing first.";return;}
+  return runTest(nm,+$("wizBase").value||5,+$("wizAct").value||5,"wizInfo",null);
+};
+// ---------- byte entropy / changed bits / counter+checksum hints ----------
+function byteStats(s,i){
+  const h=s.hist[i];let n=0,distinct=0,mn=255,mx=0;
+  for(let v=0;v<256;v++){const c=h[v];if(c){n+=c;distinct++;if(v<mn)mn=v;if(v>mx)mx=v;}}
+  let e=0;if(n)for(let v=0;v<256;v++){const c=h[v];if(c){const p=c/n;e-=p*Math.log2(p);}}
+  let mask=0;for(let b=0;b<8;b++)if(s.tog[i*8+b])mask|=1<<b;
+  return {n,distinct,entropy:e,min:mn,max:mx,togMask:mask,changes:s.cnt[i]};
+}
+function hints(s){
+  const R=s.ring,out=[];if(R.length<12)return out;
+  const len=Math.min(...R.map(r=>r.length));
+  const T=R.length-1;
+  const varies=j=>{const f=R[0][j];return R.some(r=>r[j]!==f);};
+  const distinctOf=j=>new Set(R.map(r=>r[j])).size;
+  const modal=arr=>{const m=new Map();let best=null,bc=0;for(const x of arr){const c=(m.get(x)||0)+1;m.set(x,c);if(c>bc){bc=c;best=x;}}return [best,bc];};
+  for(let j=0;j<len;j++){
+    if(!varies(j))continue;
+    const dl=[];for(let t=1;t<R.length;t++)dl.push((R[t][j]-R[t-1][j])&255);
+    const [d,c]=modal(dl);
+    let tagged=false;
+    if(d!==0&&c/T>=0.9&&distinctOf(j)>=4){out.push({byte:j,kind:"counter",text:"B"+j+": looks like a rolling counter, +"+d+" per frame (mod 256). Hint only."});tagged=true;}
+    if(!tagged){
+      for(const [nm,sh] of [["low nibble",0],["high nibble",4]]){
+        const nl=[];for(let t=1;t<R.length;t++)nl.push(((R[t][j]>>sh&15)-(R[t-1][j]>>sh&15))&15);
+        const [nd,nc]=modal(nl);const dv=new Set(R.map(r=>r[j]>>sh&15)).size;
+        if(nd!==0&&nc/T>=0.9&&dv>=4){out.push({byte:j,kind:"counter",text:"B"+j+" "+nm+": looks like a rolling counter, +"+nd+" per frame (mod 16). Hint only."});tagged=true;break;}
+      }
+    }
+    if(!tagged){
+      let nd=0;for(let t=1;t<R.length;t++)if(R[t][j]>=R[t-1][j])nd++;
+      if(nd/T>=0.98&&R[T][j]>R[0][j]&&distinctOf(j)>=3)out.push({byte:j,kind:"monotonic",text:"B"+j+": only ever rises in this window (slow counter, odometer or timer?). Hint only."});
+    }
+  }
+  if(len>=3&&distinctOfAny(R,len)){
+    for(let j=0;j<len;j++){
+      if(distinctOf(j)<3)continue;
+      const others=[];for(let k=0;k<len;k++)if(k!==j&&varies(k))others.push(k);
+      if(!others.length)continue;
+      const tests=[["XOR of the other bytes",(r)=>{let x=0;for(let k=0;k<len;k++)if(k!==j)x^=r[k];return x;},(a,b)=>a^b],
+                   ["sum of the other bytes (mod 256)",(r)=>{let x=0;for(let k=0;k<len;k++)if(k!==j)x+=r[k];return x&255;},(a,b)=>(a-b)&255]];
+      for(const [nm,f,diff] of tests){
+        const cs=R.map(r=>diff(r[j],f(r)));const [c0,cc]=modal(cs);
+        if(cc/R.length>=0.95){out.push({byte:j,kind:"checksum",text:"B"+j+": matches "+nm+(c0?" combined with constant 0x"+hex2(c0):"")+" in "+Math.round(cc*100/R.length)+"% of frames. Possible checksum, hint only."});break;}
+      }
+    }
+  }
+  return out;
+}
+function distinctOfAny(R,len){for(let j=0;j<len;j++){const f=R[0][j];if(R.some(r=>r[j]!==f))return true;}return false;}
+// ---------- candidates, names, decoder prefill ----------
+let pick=null;
+function showCand(res){
+  const c=$("cand");c.innerHTML="";pick=null;
+  if(!res.length){c.innerHTML='<span class="note">No byte changed. Try again.</span>';return;}
+  res.slice(0,8).forEach(r=>{const b=document.createElement("button");b.className="btn cand";
+    const k=sigKey(r.id,r.i);b.textContent=candText(r)+(SIG[k]?"  ["+SIG[k]+"]":((isHunter()&&KNOWN[k])?"  (known: "+KNOWN[k]+")":""));
+    b.onclick=()=>{pick={k,r};$("sigName").value=SIG[k]||(selCtl||clean($("wizName").value)||"");[...c.children].forEach(x=>x.style.outline=x===b?"2px solid var(--acc)":"none");};c.appendChild(b);});
+}
+$("bSig").onclick=()=>{
+  const nm=clean($("sigName").value);if(!pick||!nm){log("Tap a candidate line first, then type a name.");return;}
+  SIG[pick.k]=nm;saveSig();if(rec)rec.lines.push("# SIGNAL "+pick.k+" = "+nm);toast("Saved: "+pick.k+" = "+nm);renderSig();
+};
+$("bGauge").onclick=()=>{
+  if(!pick){log("Tap a candidate line first.");return;}
+  $("dId").value=idStr(pick.r.id).slice(2);$("dStart").value=pick.r.i;$("dLen").value=1;$("dName").value=clean($("sigName").value);
+  const det=document.querySelectorAll("details.card");det.forEach(x=>{if(x.querySelector("#dId"))x.open=true;});
+  toast("Decoder form filled. Set scale and unit, then Add decoder.");
+};
+function renderSig(){
+  const ks=sigKeys();
+  $("sigList").textContent=ks.length?ks.map(k=>{const m=/^0x([0-9A-F]+) B(\d)$/.exec(k);const kk=m&&(m[1].length>3?parseInt(m[1],16)+EXT:parseInt(m[1],16));const d=m&&last(kk);return k+" = "+SIG[k]+(d?"   now: 0x"+hex2(d[+m[2]]||0)+" ("+(d[+m[2]]||0)+")":"");}).join("\n"):"No names saved yet.";
+}
+$("bSigClr").onclick=()=>{SIG={};saveSig();renderSig();toast("Signal names cleared for this profile.");};
+// decoder UI
+function renderDecList(){
+  const el=$("decList");
+  if(!DEC.length){el.innerHTML='<p class="note">No decoders yet for '+esc(prof().name)+'.</p>';return;}
+  el.innerHTML=DEC.map(d=>'<div class="row tight" style="justify-content:space-between"><span style="font:12px var(--mono)">'+esc(d.name)+(d.unverified?' <span class="tag t-un">unverified</span>':'')+'<br>0x'+esc(d.ext?d.id.padStart(8,"0"):d.id)+' B'+d.start+'+'+d.len+' '+(d.endian==="le"?"LE":"BE")+' x'+d.scale+' '+(d.offset>=0?"+":"")+d.offset+' '+esc(d.unit)+'</span><button class="btn sm" data-del="'+d.uid+'" aria-label="Delete '+esc(d.name)+'">Delete</button></div>').join("");
+  el.querySelectorAll&&el.querySelectorAll("[data-del]").forEach(b=>{b.onclick=()=>{DEC=DEC.filter(x=>x.uid!==+b.dataset.del);saveDec();};});
+}
+function addFromForm(){
+  const d=addDec({id:$("dId").value,start:$("dStart").value,len:$("dLen").value,endian:$("dEnd").value,signed:$("dSigned").value,scale:$("dScale").value,offset:$("dOff").value,unit:$("dUnit").value,name:$("dName").value,min:$("dMin").value,max:$("dMax").value});
+  if(!d)toast("Decoder not added. Check ID (hex), start 0-7, length 1-4, start+length at most 8, numeric scale and offset.");
+  else toast("Decoder added: "+d.name);
+  return d;
+}
+$("bDecAdd").onclick=addFromForm;
+$("starterSel").innerHTML=STARTERS.map((s,i)=>'<option value="'+i+'">'+esc(s.label)+' (unverified)</option>').join("");
+$("bStarter").onclick=()=>{const s=STARTERS[+$("starterSel").value];if(s)addDec(Object.assign({},s.d,{unverified:true}));};
+function exportJson(){return JSON.stringify({app:APP,version:1,profile:cfg.profile,decoders:DEC.map(stripDec),names:SIG},null,1);}
+function importJson(text){
+  let o;try{o=JSON.parse(text);}catch(e){toast("Import failed: not valid JSON.");return 0;}
+  const list=Array.isArray(o)?o:(o&&Array.isArray(o.decoders)?o.decoders:[]);
+  let n=0;for(const x of list){const d=sanitizeDec(x);if(d){d.uid=++uidN;DEC.push(d);n++;}}
+  if(o&&o.names&&typeof o.names==="object"){for(const k of Object.keys(o.names)){if(/^0x[0-9A-F]+ B\d$/.test(k)){const v=clean(o.names[k]);if(v)SIG[k]=v;}}saveSig();}
+  saveDec();toast("Imported "+n+" decoder(s).");return n;
+}
+$("bDecExp").onclick=()=>{
+  const t=exportJson();$("decJson").value=t;
+  try{const blob=new Blob([t],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="hunter_decoders_"+cfg.profile+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}catch(e){}
+};
+$("bDecImp").onclick=()=>importJson($("decJson").value);
+$("decFile").onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$("decJson").value=r.result;importJson(r.result);};r.readAsText(f);};
+
+// ---------- health status ----------
+function stalledIds(now){const o=[];for(const s of ids.values()){if(s.n>6&&s.per&&s.per<1000&&now-s.seenAt>Math.max(1000,5*s.per))o.push(s);}return o;}
+function status(now){
+  if(!link)return {lvl:-1,label:"IDLE",reasons:["Not connected."]};
+  loadTick(now);
+  const r=[];let lvl=0;const add=(l,t)=>{r.push((l===2?"CHECK: ":"WARN: ")+t);if(l>lvl)lvl=l;};
+  if(now-connAt>3000&&(!lastFrameAt||now-lastFrameAt>3000))add(1,"No frames for 3 s. Is the ignition on? Is the bitrate right? Try Auto-detect in Settings.");
+  if(H.bel>=5)add(2,H.bel+" adapter error beeps. Usually wrong bitrate, bad wiring or missing termination.");
+  else if(H.bel>0)add(1,H.bel+" adapter error beep(s).");
+  const mal=H.bad+H.overflow;
+  if(mal>20)add(2,mal+" malformed frames or overflows. Check the cable and USB connection.");
+  else if(mal>0)add(1,mal+" malformed frame(s) dropped.");
+  if(isHunter()&&H.ctrJump>3)add(2,"0x140 counter jumped "+H.ctrJump+" times, so frames are being lost.");
+  if(L.load>0.85)add(2,"Bus load about "+Math.round(L.load*100)+"%. Very high.");
+  else if(L.load>0.6)add(1,"Bus load about "+Math.round(L.load*100)+"%.");
+  const st=stalledIds(now);
+  if(st.length)add(1,st.length+" ID(s) went quiet: "+st.slice(0,4).map(s=>idStr(s.key)).join(" ")+(st.length>4?" ...":""));
+  else{const rg=[...ids.values()].filter(s=>s.gapAt&&now-s.gapAt<30000);if(rg.length)add(1,"Gap in the last 30 s on "+rg.slice(0,4).map(s=>idStr(s.key)).join(" ")+".");}
+  return {lvl,label:["OK","WARN","CHECK"][lvl],reasons:r};
+}
+function resetCounters(){
+  for(const k of Object.keys(H))if(k!=="unknown")H[k]=0;H.unknown.clear();
+  for(const s of ids.values()){s.gapN=0;s.gapMax=0;s.gapAt=0;}
+}
+$("bHealthClr").onclick=resetCounters;
+
+// ---------- display ----------
+const GEAR={0x00:"N",0x08:"1",0x10:"2",0x18:"3",0x20:"4",0x28:"5",0x38:"init"};
+function last(id){const s=ids.get(id);return s&&s.last;}
+function fmtNum(v){const a=Math.abs(v);return a>=1000?v.toFixed(0):a>=100?v.toFixed(1):v.toFixed(2).replace(/\.?0+$/,"")||"0";}
+function heroVals(now){
+  let rpm=null,spd=null,spdU="km/h",gear=null,rpmSrc="",spdSrc="";
+  if(isHunter()){
+    let d=last(0x100);if(d&&d.length>5){rpm=d[4]<<8|d[5];rpmSrc="0x100";}
+    d=last(0x12B);if(d&&d.length>1&&!(d[0]===0xFF&&d[1]===0xFF)){spd=(d[0]<<8|d[1])/10;spdSrc="wheel A";}
+    d=last(0x150);if(d)gear=GEAR[d[0]]??("0x"+hex2(d[0]));
+  }else{
+    const o=OBD.get(0x0C);if(o&&now-o.t<5000){rpm=o.v;rpmSrc="OBD";}
+    const q=OBD.get(0x0D);if(q&&now-q.t<5000){spd=q.v;spdSrc="OBD";}
+  }
+  for(const d of DEC){const u=UV.get(d.uid);if(!u||now-u.t>5000)continue;const un=d.unit.toLowerCase();
+    if(un==="rpm"&&rpm==null){rpm=u.v;rpmSrc="mine";}
+    else if((un==="km/h"||un==="kph"||un==="mph")&&spd==null){spd=u.v;spdU=d.unit;spdSrc="mine";}
+    else if(un==="gear"&&gear==null){gear=String(Math.round(u.v));}}
+  return {rpm,spd,spdU,gear,rpmSrc,spdSrc};
+}
+// animated gauge (eased toward target; instant when reduced motion)
+const RM=(typeof matchMedia==="function")?matchMedia("(prefers-reduced-motion: reduce)"):{matches:false};
+const GA={rpm:0,target:0,max:0,base:8000};
+function buildTicks(max){
+  const g=$("ticks");let h="";const n=Math.round(max/1000);
+  for(let i=0;i<=n;i++){
+    const a=(135+270*i/n)*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+    h+='<line class="tick" x1="'+(100+90*c).toFixed(2)+'" y1="'+(100+90*s).toFixed(2)+'" x2="'+(100+96*c).toFixed(2)+'" y2="'+(100+96*s).toFixed(2)+'"/>';
+    if(n<=12||i%2===0)h+='<text class="tl" x="'+(100+105*c).toFixed(2)+'" y="'+(100+105*s+3).toFixed(2)+'">'+i+'</text>';
+  }
+  g.innerHTML=h;GA.max=max;
+}
+function setArc(v){
+  if(!GA.max)return;
+  const pct=Math.max(0,Math.min(1,v/GA.max));
+  const el=$("arcV");el.setAttribute("stroke-dasharray",(pct*270).toFixed(2)+" 400");
+  el.setAttribute("class","arc-val"+(pct>0.88?" hot":""));el.style.visibility=pct<0.004?"hidden":"visible";
+}
+let gaRaf=0;
+function gaStep(){
+  const diff=GA.target-GA.rpm;
+  if(RM.matches||Math.abs(diff)<2)GA.rpm=GA.target;else GA.rpm+=diff*0.22;
+  setArc(GA.rpm);
+}
+function gaLoop(){gaStep();gaRaf=requestAnimationFrame(gaLoop);}
+function renderHero(){
+  const now=nowMs(),h=heroVals(now);
+  const base=isHunter()?9000:8000;
+  if(h.rpm!=null){const need=Math.max(base,Math.ceil((h.rpm+500)/1000)*1000);if(need!==GA.max)buildTicks(need);}
+  else if(GA.max!==base)buildTicks(base);
+  GA.target=h.rpm==null?0:h.rpm;
+  $("rpm").textContent=h.rpm==null?"–":String(Math.round(h.rpm));
+  $("spd").textContent=h.spd==null?"–":(h.spd<100?h.spd.toFixed(1):h.spd.toFixed(0));
+  $("spdU").textContent=h.spdU;$("spdTag").textContent=h.spdSrc;$("spdTag").hidden=!h.spdSrc;
+  $("gear").textContent=h.gear==null?"–":h.gear;
+  $("gearTag").textContent=isHunter()?"confirmed":"";$("gearTag").hidden=!isHunter();
+  if(typeof requestAnimationFrame!=="function")gaStep();
+}
+function renderHunter(){
+  let d;
+  if((d=last(0x12B))){const a=d[0]<<8|d[1],b=d[2]<<8|d[3];
+    $("wa").textContent=(d[0]===0xFF&&d[1]===0xFF)?"–":(a/10).toFixed(1);
+    $("wb").textContent=(d[2]===0xFF&&d[3]===0xFF)?"–":(b/10).toFixed(1);}
+  if((d=last(0x80))){$("b1").textContent=d[1];$("pFb").classList.toggle("on",!!(d[0]&1));$("pCl").classList.toggle("on",!!(d[7]&4));$("pSs").classList.toggle("on",!!(d[7]&0x20));}
+  if((d=last(0x140)))$("ctr").textContent=(d[1]<<16|d[2]<<8|d[3]);
+  if((d=last(0x211)))$("tmp").textContent=[d[0],d[1],d[2]].map(x=>x-40).join(" / ");
+  if((d=last(0x120)))$("map").textContent=d[0]*10;
+}
+function renderObd(now){
+  const pids=[...OBD.keys()].sort((a,b)=>a-b);
+  $("obdNote").hidden=pids.length>0||false;
+  $("obd").innerHTML=pids.map(p=>{const o=OBD.get(p),stl=now-o.t>5000;
+    return '<div class="tile'+(stl?' stale':'')+'"><div class="k">'+esc(o.def.n)+' <span class="tag">PID '+hex2(p)+'</span></div><div class="v">'+fmtNum(o.v)+' <small>'+esc(o.def.u)+'</small></div></div>';}).join("");
+}
+let ugBuilt="";
+function buildUG(){
+  $("ugCard").hidden=DEC.length===0;
+  const sig=DEC.map(d=>d.uid).join(",");ugBuilt=sig;
+  $("ugauges").innerHTML=DEC.map(d=>'<div class="tile" id="ug'+d.uid+'"><div class="k">'+esc(d.name)+(d.unverified?' <span class="tag t-un">unverified</span>':'')+'</div><div class="v"><span class="ugv">–</span> <small>'+esc(d.unit)+'</small></div><div class="bar" aria-hidden="true"><i></i></div></div>').join("");
+}
+function renderUG(now){
+  for(const d of DEC){
+    const el=$("ug"+d.uid);if(!el||!el.querySelector)continue;
+    const u=UV.get(d.uid),v=el.querySelector(".ugv"),bar=el.querySelector(".bar i");
+    if(!u||!v)continue;
+    v.textContent=fmtNum(u.v);el.classList.toggle("stale",now-u.t>5000);
+    let lo=d.min!=null?d.min:u.lo,hi=d.max!=null?d.max:u.hi;if(hi<=lo)hi=lo+1;
+    if(bar)bar.style.width=Math.max(0,Math.min(100,(u.v-lo)/(hi-lo)*100)).toFixed(1)+"%";
+  }
+}
+let rawSig="";
+function renderRaw(now){
+  const rows=[...ids.keys()].sort((a,b)=>a-b).map(id=>{
+    const s=ids.get(id);
+    const cells=[...s.last].map((b,i)=>{
+      const age=now-s.ch[i];const hot=s.ch[i]&&age<1500;
+      const style=hot?`background:rgba(34,211,238,${Math.max(.18,1-age/1500).toFixed(2)});color:#031318`:(s.cnt[i]?"color:#e9f4ff":"color:#6b7f9b");
+      return `<span class="b" style="${style}">${hex2(b)}</span>`;
+    }).join(" ");
+    const hz=(now-s.wt>2500)?0:s.hz;
+    const nm=[...s.last].map((_,i)=>SIG[sigKey(id,i)]||"").filter(Boolean).join("; ");
+    return `<tr data-k="${id}"><td>${idStr(id)}${nm?"<span class='nm'>"+esc(nm)+"</span>":""}</td><td>${hz.toFixed(0)}</td><td>${s.n}</td><td>${cells}</td></tr>`;
+  });
+  $("raw").innerHTML=rows.join("");
+}
+$("raw").addEventListener("click",e=>{const tr=e.target.closest&&e.target.closest("tr[data-k]");if(tr){selId=+tr.dataset.k;showTab("identify");buildIdSel(true);$("byteCard").open=true;}});
+let selId=null,idSelCount=-1;
+function buildIdSel(force){
+  if(!force&&idSelCount===ids.size)return;idSelCount=ids.size;
+  const keys=[...ids.keys()].sort((a,b)=>a-b);
+  if(selId==null||!ids.has(selId))selId=keys[0]??null;
+  $("selId").innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===selId?" selected":"")+'>'+idStr(k)+'</option>').join("");
+}
+$("selId").onchange=()=>{selId=+$("selId").value;};
+function renderBytes(now){
+  const s=selId!=null&&ids.get(selId);
+  if(!s){$("bytes").innerHTML='<tr><td colspan="5" class="note">No IDs yet.</td></tr>';$("hints").innerHTML="<li>Select an ID.</li>";return;}
+  let h="";
+  for(let i=0;i<s.last.length;i++){
+    const b=byteStats(s,i),v=s.last[i];
+    const bits=[7,6,5,4,3,2,1,0].map(k=>'<i class="'+((b.togMask>>k&1)?"t":"")+'">'+(v>>k&1)+'</i>').join("");
+    h+='<tr><td>B'+i+(SIG[sigKey(selId,i)]?'<span class="nm">'+esc(SIG[sigKey(selId,i)])+'</span>':'')+'</td><td>'+hex2(v)+'</td><td><span class="ebar" style="width:'+(b.entropy/8*48+2).toFixed(0)+'px"></span> '+b.entropy.toFixed(2)+'</td><td>'+b.distinct+'</td><td><span class="bits">'+bits+'</span></td></tr>';
+  }
+  $("bytes").innerHTML=h;
+  const hs=hints(s);
+  $("hints").innerHTML=hs.length?hs.map(x=>"<li>"+esc(x.text)+"</li>").join(""):"<li>"+(s.ring.length<12?"Need at least 12 frames of this ID.":"No counter or checksum pattern found.")+"</li>";
+}
+function renderSigLive(){renderSig();}
+function renderHealth(now){
+  const s=status(now);
+  $("hLvl").textContent=s.label;$("hLvl").className="lvl s"+(s.lvl<0?9:s.lvl);
+  $("hSum").textContent=s.lvl<0?"Not connected.":s.lvl===0?"No problems seen.":s.lvl===1?"Something to look at.":"Fix the connection first.";
+  $("hReasons").innerHTML=s.reasons.map(x=>"<li>"+esc(x)+"</li>").join("");
+  loadTick(now);const pct=Math.round(L.load*100);$("loadTxt").textContent="about "+pct+"%";$("loadBar").style.width=Math.min(100,pct)+"%";
+  const t=(l,v)=>'<div class="tile"><div class="k">'+l+'</div><div class="v">'+v+'</div></div>';
+  $("hGrid").innerHTML=t("Error beeps",H.bel)+t("Malformed",H.bad)+t("Resynced",H.resync)+t("Overflows",H.overflow)+t("Message gaps",H.stale)+t("Frames",FR.total)+
+    (isHunter()?t("0x140 jumps",H.ctrJump)+t("Short frames",H.dlcOdd):t("Filtered by ID format",H.filtered)+t("OBD codes read by others",H.dtcResp));
+  $("unk").textContent=prof().known?(H.unknown.size?[...H.unknown.entries()].map(([i,n])=>idStr(i)+"("+n+")").join(" "):"none"):"Not tracked for this profile.";
+  drawGaps(now);
+}
+function drawGaps(now){
+  const cv=$("gapCv");if(!cv.getContext)return;
+  const rows=[...ids.values()].sort((a,b)=>a.key-b.key).slice(0,24);
+  const rh=14,W=380,lw=84,cw=(W-lw)/30;
+  cv.height=Math.max(40,rows.length*rh+4);cv.width=W;
+  const g=cv.getContext("2d");if(!g)return;g.clearRect(0,0,W,cv.height);g.font="10px monospace";g.textBaseline="middle";
+  const sec=Math.floor(now/1000);
+  rows.forEach((s,r)=>{
+    const y=r*rh+2;g.fillStyle="#94a9c6";g.fillText(idStr(s.key),2,y+rh/2-1);
+    for(let c=0;c<30;c++){const sc=sec-30+c;if(sc<s.firstSec)continue;
+      const n=bucket(s,sc);g.fillStyle=n>0?"#22d3ee":(s.per&&s.per<1000?"#ff6b6b":"#2a3a52");g.fillRect(lw+c*cw+1,y,cw-2,rh-3);}
+  });
+  const lines=rows.filter(s=>s.gapN).map(s=>idStr(s.key)+": "+s.gapN+" gap(s), longest "+(s.gapMax/1000).toFixed(1)+" s");
+  $("gapTxt").textContent=lines.length?lines.join("\n"):(rows.length?"No gaps seen.":"No IDs yet.");
+}
+function renderRec(now){
+  if(rec)$("recInfo").textContent="Recording “"+rec.label+"”: "+rec.lines.length+" lines, "+((now-rec.start)/1000).toFixed(0)+" s";
+  else if(saved)$("recInfo").textContent="Last capture ready to save: "+saved.lines.length+" lines.";
+}
+let tab="live";
+function showTab(t){
+  tab=t;
+  document.querySelectorAll("[data-tab]").forEach(e=>{e.hidden=e.dataset.tab!==t;});
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.t===t)));
+  if(t==="identify")buildIdSel(true);
+  const m=$("main");if(m&&m.scrollTo)m.scrollTo(0,0);
+  renderSlow();
+}
+document.querySelectorAll("#tabs button").forEach(b=>{b.onclick=()=>showTab(b.dataset.t);});
+function renderSlow(){
+  const now=nowMs();
+  renderChip();renderRec(now);
+  if(tab==="live"){if(isHunter())renderHunter();else renderObd(now);renderUG(now);renderRaw(now);}
+  else if(tab==="identify"){buildIdSel(false);renderBytes(now);renderSig();}
+  else if(tab==="health")renderHealth(now);
+}
+setInterval(renderSlow,500);
+setInterval(()=>{renderHero();if(tab==="live")renderUG(nowMs());},100);
+
+// ---------- profile UI ----------
+function buildRateSel(){
+  const sel=$("rateSel");const cur=curRate();
+  sel.innerHTML=Object.keys(SCODE).map(k=>'<option value="'+k+'"'+(+k===cur?" selected":"")+'>'+(+k>=1000?(k/1000)+" Mbps":k+" kbps")+' (S'+SCODE[k]+')</option>').join("");
+  sel.value=String(cur);
+}
+function applyProfile(){
+  const p=prof();
+  document.querySelectorAll("[data-prof]").forEach(e=>{e.hidden=!String(e.dataset.prof).split(" ").includes(p.id);});
+  document.querySelectorAll("#profPick button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.p===p.id)));
+  $("profLbl").textContent=p.name+" · listen-only";
+  $("profNote").textContent=p.note;
+  $("fmtSel").value=curFmt();buildRateSel();loadSig();loadDec();buildControls();buildUG();renderDecList();
+  $("ctlNote").textContent=(isHunter()?"Hunter controls. ":"Car controls. ")+"Baseline 4 s, then event 4 s. Only operate controls when parked and safe.";
+  GA.max=0;
+}
+async function setProfile(id){
+  if(!PROFILES[id])return false;
+  if(rec){toast("Stop recording before switching vehicle profile.");return false;}
+  if(id===cfg.profile)return true;
+  cfg.profile=id;saveCfg();resetLive();applyProfile();selId=null;idSelCount=-1;
+  if(link){try{await setup();}catch(e){log("Re-apply bitrate failed: "+e.message);}}
+  renderSlow();return true;
+}
+document.querySelectorAll("#profPick button").forEach(b=>{b.onclick=()=>setProfile(b.dataset.p);});
+$("rateSel").onchange=async()=>{
+  if(rec){toast("Stop recording before changing bitrate.");buildRateSel();return;}
+  cfg.rate[cfg.profile]=+$("rateSel").value;saveCfg();$("profLbl").textContent=prof().name+" · listen-only";
+  resetLive();if(link){try{await setup();}catch(e){log("Re-apply bitrate failed: "+e.message);}}
+};
+$("fmtSel").onchange=()=>{cfg.fmt[cfg.profile]=$("fmtSel").value;saveCfg();};
+$("lbl").addEventListener("input",()=>{if(rec)rec.label=$("lbl").value||rec.label;});
+
+// ---------- onboarding ----------
+function showOnb(show){$("onb").hidden=!show;}
+$("bOnbOk").onclick=()=>{lsSet("hcl.onb",1);showOnb(false);};
+$("bOnbConn").onclick=()=>{lsSet("hcl.onb",1);showOnb(false);connectDefault();};
+$("bOnbShow").onclick=()=>{showOnb(true);showTab("live");};
+
+// ---------- init ----------
+document.addEventListener&&document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState==="visible"&&link){try{wake=await navigator.wakeLock.request("screen");}catch(e){}}});
+applyProfile();
+showOnb(!lsGet("hcl.onb",0));
+setConn(false);
+showTab("live");
+if(typeof requestAnimationFrame==="function"){buildTicks(GA.base);gaRaf=requestAnimationFrame(gaLoop);}else buildTicks(GA.base);
+log("Ready. Plug in the CANable via OTG, then tap Connect.");
+</script>
+<script>if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost"))navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
+</body>
+</html>
