@@ -7,7 +7,8 @@ Usage:
 For each file it prints:
   * frames per CAN ID and rate
   * capture header: vehicle profile, bitrate, ID format (v2 files)
-  * known Hunter signals (only for Hunter captures; skipped for cars/custom)
+  * known Hunter signals with confidence labels (front/rear wheel, neutral, engine/intake temp, battery V; Hunter captures only)
+  * real >1 s gaps on IDs running >= 5 Hz (compare with the recorded '# HEALTH gaps=' value)
   * passive OBD-II responses (0x7E8-0x7EF) if another tool produced them
   * your '# SIGNAL' byte names and user-defined decoders (min/max/last/mean)
   * the recorded '# HEALTH' line
@@ -174,11 +175,29 @@ def per_id(frames):
     return by
 
 
+def real_gaps(by):
+    """Real >1 s silences on IDs that normally run at >= 5 Hz (typical period <= 220 ms). Same rule as the apps' Health 'gaps'."""
+    out = {}
+    for i, L in by.items():
+        ts = [t for t, _ in L]
+        if len(ts) < 8:
+            continue
+        dts = sorted(b - a for a, b in zip(ts, ts[1:]))
+        if dts[len(dts) // 2] > 0.22:
+            continue
+        n = sum(1 for a, b in zip(ts, ts[1:]) if b - a > 1.0)
+        if n:
+            out[i] = n
+    return out
+
+
 def summary(by, dur):
     print("  ID     frames    Hz")
     for i in sorted(by):
         n = len(by[i])
         print(f"  {fmt_id(i)} {n:8d} {n / dur if dur else 0:6.1f}")
+    g = real_gaps(by)
+    print(f"  Real gaps (>1 s silence on IDs running >= 5 Hz): {sum(g.values())}" + (": " + ", ".join(f"{fmt_id(i)} x{n}" for i, n in sorted(g.items())) if g else ""))
 
 
 def rng(vals):
@@ -196,22 +215,31 @@ def decode(by):
     if 0x12B in by:
         a = [(d[0] << 8 | d[1]) / 10 for _, d in by[0x12B] if not (d[0] == 0xFF and d[1] == 0xFF)]
         b = [(d[2] << 8 | d[3]) / 10 for _, d in by[0x12B] if not (d[2] == 0xFF and d[3] == 0xFF)]
-        print(f"   Wheel A km/h (0x12B B0:B1): max {max(a) if a else '-'} | Wheel B (B2:B3) max {max(b) if b else '-'}"
-              "  [front/rear not confirmed; B probably rear]")
+        print(f"   Front wheel km/h (0x12B B0:B1 /10 = wheel A, likely): max {max(a) if a else '-'}"
+              f" | Rear wheel (B2:B3 /10 = wheel B, likely) max {max(b) if b else '-'}"
+              "  [B = rear: gear test showed B 4-5 km/h while A was 0, bike presumably on a stand]")
     if 0x80 in by:
         L = [d for _, d in by[0x80]]
-        fb = sum(1 for d in L if d[0] & 1)
+        b0 = sum(1 for d in L if d[0] & 1)
+        ne = sum(1 for d in L if d[7] & 0x40)
         cl = sum(1 for d in L if d[7] & 4)
         ss = sum(1 for d in L if d[7] & 0x20)
-        print(f"   0x080: front brake on {fb}/{len(L)}, clutch {cl}/{len(L)}, side stand {ss}/{len(L)} frames;"
-              f" B1 (analog candidate) max {max(d[1] for d in L)}")
+        print(f"   0x080: B0 bit0 on {b0}/{len(L)} (unverified: on when engine off, was front brake), neutral B7 bit6 (likely) {ne}/{len(L)},"
+              f" clutch {cl}/{len(L)}, side stand {ss}/{len(L)} frames; B1 (analog candidate) max {max(d[1] for d in L)}")
+        print("   Neutral note: B7 bit6 is set in neutral, clears in 1st gear, and also clears when the kill switch is turned off (unresolved).")
     if 0x140 in by:
         v = [d[1] << 16 | d[2] << 8 | d[3] for _, d in by[0x140]]
         print(f"   0x140 24-bit counter (hypothesis, ECU-on time): {v[0]} -> {v[-1]}")
     if 0x211 in by:
         L = [d for _, d in by[0x211]]
-        print("   0x211 B0/B1/B2 deg C (raw-40, provisional): "
-              + " / ".join(f"{min(d[i] for d in L) - 40}..{max(d[i] for d in L) - 40}" for i in range(3)))
+        r0 = rng([d[0] - 40 for d in L])
+        r1 = rng([d[1] - 40 for d in L])
+        rv = rng([d[2] * 0.1 for d in L])
+        print(f"   Engine temp (0x211 B0 raw-40, likely): {r0[0]}..{r0[1]} C")
+        print(f"   Intake temp (0x211 B1 raw-40, likely): {r1[0]}..{r1[1]} C")
+        print(f"   Battery V (0x211 B2 x0.1, strong evidence): {rv[0]:.1f}..{rv[1]:.1f} V"
+              "  [13.8 running, ~12.4 engine off, ~11.2 cranking; pass/flash load dips it]")
+    print("   Not found on CAN: horn, high beam, low beam, pass/flash, rear brake (only the pass/flash electrical load shows as a battery-voltage dip).")
     for i in (0x280, 0x290, 0x450):
         if i in by:
             pay = Counter(d for _, d in by[i])

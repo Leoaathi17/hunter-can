@@ -45,3 +45,7 @@ Nothing in the Android layer was compiled or run on a device in the environment 
 - The Android app uses the Android clock (`elapsedRealtimeNanos`) for capture time stamps.
 - Junk glued directly in front of a frame on the same line (no CR) loses that one frame (also true on the web page).
 - Compare excludes the 0x140 counter for the Hunter profile, like the Python analyzer.
+
+## Version 2.1 (signal-map corrections, Battery gauge)
+
+`core/run_tests.sh` now also replays real captures from `core/testdata/real/` (Horn, Ignition_on, engine-off, gear 1, kill switch, front brake, pass/flash): decoders (front/rear wheel, engine/intake temp, battery V, neutral bit, unverified B0 bit0), the BatteryMonitor state logic (engine off ~12.4 V, running ~13.8 V, cranking minimum ~11.2 V), the HEALTH footer (`vmin/vmax/crankmin`) and the gap rule (Horn capture: gaps = 0). Not run on a phone or on the bike: the new `BatteryGaugeView` and the Live tab layout are only compiled by the Gradle build, not exercised.

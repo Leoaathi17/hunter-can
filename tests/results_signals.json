@@ -1,0 +1,67 @@
+[
+ {
+  "name": "gap regression: real Horn capture (clean, app reported gaps=25) gives gaps = 0",
+  "ok": true,
+  "detail": "Horn + 6 more real captures: gaps = 0"
+ },
+ {
+  "name": "gap rule: 1 Hz ID with a 3 s pause is not a gap; 10 Hz ID silent for 1.2 s is",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "gap rule: disconnect/reconnect and bitrate-detect silence are not counted as gaps",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "real gear-1 test: neutral bit set in neutral, cleared in 1st; REAR wheel 5.0 while FRONT 0.0",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "real captures: B0 bit0 off in front-brake capture (engine running), on all the time with the engine off",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "labels: tiles, pills, KNOWN, no stale front-brake / provisional text",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "battery thresholds: engine off / running / cranking zones and boundaries",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "battery state on the real ignition capture: running -> engine just stopped -> off -> cranking -> running",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "battery state on real running (~13.8 V), engine-off (~12.4 V) and pass/flash (load dip) captures",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "battery: stale data, no RPM, stall blip, and non-Hunter profile",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "HEALTH footer carries vmin/vmax/crankmin",
+  "ok": true,
+  "detail": "# HEALTH bad=0 resync=0 bel=0 overflow=0 gaps=0 ctrjump=0 load=7 filtered=0 vmin=11.2 vmax=13.6 crankmin=11.2"
+ },
+ {
+  "name": "app version strings and service-worker cache bumped to 3.1",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "name": "analyzer: new labels, battery/engine/intake ranges, real-gap count, on all new and old captures",
+  "ok": true,
+  "detail": "ok"
+ }
+]

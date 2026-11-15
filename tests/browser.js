@@ -36,6 +36,7 @@ let fails=0;const ok=(n,c,d)=>{console.log((c?'PASS':'FAIL')+' '+n+(d?' - '+d:''
   const w=await page.evaluate(()=>window.__written);ok('setup commands sent C,S6,M1,O',JSON.stringify(w)===JSON.stringify(['C\r','S6\r','M1\r','O\r']),JSON.stringify(w));
   await page.screenshot({path:out+'/02_live_hunter.png'});
   ok('hunter card visible on hunter',await page.locator('[data-prof="hunter"]').first().isVisible());
+  ok('battery card visible on hunter with disclaimer and state text',await page.locator('#batCard').isVisible()&&/not a battery health test/.test(await page.locator('#batNote').textContent())&&(await page.locator('#batState').textContent()).length>0);
   ok('obd card hidden on hunter',!(await page.locator('[data-prof="car custom"]').isVisible()));
   // tab sizes: touch targets
   const sizes=await page.evaluate(()=>[...document.querySelectorAll('#tabs button,.btn,select,input')].filter(e=>e.offsetParent).map(e=>{const r=e.getBoundingClientRect();return [e.id||e.textContent.trim().slice(0,14),Math.round(r.width),Math.round(r.height)];}));
@@ -48,7 +49,7 @@ let fails=0;const ok=(n,c,d)=>{console.log((c?'PASS':'FAIL')+' '+n+(d?' - '+d:''
   await page.click('#tabs button[data-t=settings]');
   await page.click('#profPick button[data-p=car]');
   await page.click('#tabs button[data-t=live]');await page.waitForTimeout(400);
-  ok('car: hunter card hidden',!(await page.locator('[data-prof="hunter"]').isVisible()));
+  ok('car: hunter cards (signals + battery) hidden',!(await page.locator('[data-prof="hunter"]').first().isVisible())&&!(await page.locator('#batCard').isVisible()));
   ok('car: obd card visible',await page.locator('[data-prof="car custom"]').isVisible());
   const txt=await page.evaluate(()=>document.body.innerText);
   ok('car: no Hunter signal names in visible text',!/Hunter 350 signals|Wheel A|Side stand/.test(txt));

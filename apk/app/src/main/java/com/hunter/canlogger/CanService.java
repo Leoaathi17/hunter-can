@@ -497,6 +497,7 @@ public class CanService extends Service {
 
     private void runDetect() {
         final int previous = engine.rateKbps();
+        engine.discontinuity();
         try {
             BitrateDetector.Env env = new BitrateDetector.Env() {
                 @Override public void send(String cmd) throws IOException {
@@ -527,6 +528,7 @@ public class CanService extends Service {
             detectInfo = "Auto-detect error: " + e.getMessage();
             log(detectInfo);
         } finally {
+            engine.discontinuity();
             detecting = false;
         }
     }

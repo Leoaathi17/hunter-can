@@ -107,7 +107,7 @@
  {
   "name": "capture round trip -> hunter_analyze.py: car profile, 29-bit, decoder, names, health, find-signal marks",
   "ok": true,
-  "detail": "3483 frames re-read by analyzer; test result parsed"
+  "detail": "3456 frames re-read by analyzer; test result parsed"
  },
  {
   "name": "capture round trip: car recording with 29-bit + OBD + decoders via recorder, analyzer decodes values",
@@ -127,12 +127,12 @@
  {
   "name": "reconnect + autosave + recover (cable drop mid-recording)",
   "ok": true,
-  "detail": "drop->reconnect with markers, 28544 lines recovered from IndexedDB after \"reload\""
+  "detail": "drop->reconnect with markers, 28079 lines recovered from IndexedDB after \"reload\""
  },
  {
   "name": "service worker: cache version bumped, file list complete, old caches purged, offline fallback",
   "ok": true,
-  "detail": "cache hcl-v3.0, 7 files"
+  "detail": "cache hcl-v3.1, 7 files"
  },
  {
   "name": "UX statics: five tabs, read-only notice, onboarding text, safe areas, reduced-motion, viewport, 44px CSS",

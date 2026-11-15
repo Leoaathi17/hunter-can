@@ -8,7 +8,7 @@ import java.util.Map;
  * Text capture format, identical to the PWA v2 (and readable by hunter_analyze.py):
  * <pre>
  *   # Hunter live capture, label: X, started &lt;ISO time&gt;
- *   # APP hunter-can-android 2
+ *   # APP hunter-can-android 2.1
  *   # PROFILE id=car name=Generic_car bitrate=500000 idfmt=both listen_only=1
  *   # SIGNAL 0x1A0 B2 = Brake bits
  *   # SIGNAL 0x7E8 B3+2 BE signed=0 scale=0.25 offset=0 unit=rpm = Engine speed
@@ -22,7 +22,7 @@ public final class CaptureFormat {
     private CaptureFormat() {}
 
     public static final String APP = "hunter-can-android";
-    public static final int APP_VERSION = 2;
+    public static final String APP_VERSION = "2.1";
 
     private static final char[] HEX = "0123456789ABCDEF".toCharArray();
 
@@ -92,6 +92,6 @@ public final class CaptureFormat {
 
     public static String healthLine(HealthCounters h, double load) {
         return "# HEALTH bad=" + h.bad + " resync=" + h.resync + " bel=" + h.bel + " overflow=" + h.overflow
-                + " gaps=" + h.gaps + " ctrjump=" + h.ctrJump + " load=" + Math.round(load * 100) + " filtered=" + h.filtered;
+                + " gaps=" + h.gaps + " ctrjump=" + h.ctrJump + " load=" + Math.round(load * 100) + " filtered=" + h.filtered + h.batterySuffix;
     }
 }

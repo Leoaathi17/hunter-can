@@ -1,6 +1,6 @@
 # Building Hunter CAN logger (Android, Java)
 
-Version 2.0. The APK was NOT built in the environment that produced this project (no Android SDK, no network).
+Version 2.1. The APK was NOT built in the environment that produced this project (no Android SDK, no network).
 The pure-Java core compiles and its 233 checks pass there; the Android layer (UI, service, USB driver) was only
 reviewed by hand. Expect that the first build may show small compile errors; see TESTING.md.
 The new UI is built in code (no Material library); the only dependency is androidx.core for FileProvider.

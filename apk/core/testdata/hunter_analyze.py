@@ -7,7 +7,8 @@ Usage:
 For each file it prints:
   * frames per CAN ID and rate
   * capture header: vehicle profile, bitrate, ID format (v2 files)
-  * known Hunter signals (only for Hunter captures; skipped for cars/custom)
+  * known Hunter signals with confidence labels (front/rear wheel, neutral, engine/intake temp, battery V; Hunter captures only)
+  * real >1 s gaps on IDs running >= 5 Hz (compare with the recorded '# HEALTH gaps=' value)
   * passive OBD-II responses (0x7E8-0x7EF) if another tool produced them
   * your '# SIGNAL' byte names and user-defined decoders (min/max/last/mean)
   * the recorded '# HEALTH' line
@@ -15,7 +16,14 @@ For each file it prints:
   * for every control test (BASELINE / EVENT marks written by the page), the
     bytes that changed, ranked. These are CANDIDATES, not identifications.
 
-Read-only analysis. Nothing is ever sent to the bike.
+v3 files may also contain (only when the opt-in Diagnostics mode was used):
+  * '# TX <t> <ID> <n> <bytes> [isotp]'   every frame the app transmitted (isotp = OBD payload given to an ELM327)
+  * '# MODE_DIAGNOSTICS <t>' / '# MODE_MONITOR <t>'   adapter mode changes
+  * '# ADAPTER type=... mode=...'          which adapter produced the file
+The analyzer lists the TX frames, flags a Mode 04 (clear codes) request, and decodes OBD-II
+fault-code (Mode 03/07/0A) and VIN (Mode 09) responses found in the frames.
+
+Read-only analysis of a file. This script never sends anything to a vehicle.
 """
 import re
 import sys
@@ -87,7 +95,10 @@ def decode_signal(d, data):
 
 
 def new_meta():
-    return {"profile": {}, "names": {}, "decoders": [], "health": None, "app": None}
+    return {"profile": {}, "names": {}, "decoders": [], "health": None, "app": None, "tx": [], "adapter": None}
+
+
+TXLINE = re.compile(r"^# TX (\d+\.\d+) ([0-9A-F]{3}|[0-9A-F]{8}) (\d) ?((?:[0-9A-F]{2} ?)*?)\s*(isotp)?\s*$")
 
 
 def parse_live(path):
@@ -97,7 +108,15 @@ def parse_live(path):
         if line.startswith("# MARK "):
             p = line.split(" ", 3)
             marks.append((float(p[2]), p[3] if len(p) > 3 else ""))
-        elif line.startswith(("# DISCONNECT ", "# RECONNECT ", "# USER_DISCONNECT ")):
+        elif line.startswith("# TX "):
+            m = TXLINE.match(line)
+            if m:
+                d = bytes.fromhex(m.group(4).replace(" ", ""))
+                if len(d) == int(m.group(3)):
+                    meta["tx"].append((float(m.group(1)), key_of(m.group(2)), d, bool(m.group(5))))
+        elif line.startswith("# ADAPTER "):
+            meta["adapter"] = line[10:].strip()
+        elif line.startswith(("# DISCONNECT ", "# RECONNECT ", "# USER_DISCONNECT ", "# MODE_DIAGNOSTICS ", "# MODE_MONITOR ")):
             p = line.split()
             marks.append((float(p[2]), p[1]))
         elif line.startswith("# PROFILE "):
@@ -156,11 +175,29 @@ def per_id(frames):
     return by
 
 
+def real_gaps(by):
+    """Real >1 s silences on IDs that normally run at >= 5 Hz (typical period <= 220 ms). Same rule as the apps' Health 'gaps'."""
+    out = {}
+    for i, L in by.items():
+        ts = [t for t, _ in L]
+        if len(ts) < 8:
+            continue
+        dts = sorted(b - a for a, b in zip(ts, ts[1:]))
+        if dts[len(dts) // 2] > 0.22:
+            continue
+        n = sum(1 for a, b in zip(ts, ts[1:]) if b - a > 1.0)
+        if n:
+            out[i] = n
+    return out
+
+
 def summary(by, dur):
     print("  ID     frames    Hz")
     for i in sorted(by):
         n = len(by[i])
         print(f"  {fmt_id(i)} {n:8d} {n / dur if dur else 0:6.1f}")
+    g = real_gaps(by)
+    print(f"  Real gaps (>1 s silence on IDs running >= 5 Hz): {sum(g.values())}" + (": " + ", ".join(f"{fmt_id(i)} x{n}" for i, n in sorted(g.items())) if g else ""))
 
 
 def rng(vals):
@@ -178,22 +215,31 @@ def decode(by):
     if 0x12B in by:
         a = [(d[0] << 8 | d[1]) / 10 for _, d in by[0x12B] if not (d[0] == 0xFF and d[1] == 0xFF)]
         b = [(d[2] << 8 | d[3]) / 10 for _, d in by[0x12B] if not (d[2] == 0xFF and d[3] == 0xFF)]
-        print(f"   Wheel A km/h (0x12B B0:B1): max {max(a) if a else '-'} | Wheel B (B2:B3) max {max(b) if b else '-'}"
-              "  [front/rear not confirmed; B probably rear]")
+        print(f"   Front wheel km/h (0x12B B0:B1 /10 = wheel A, likely): max {max(a) if a else '-'}"
+              f" | Rear wheel (B2:B3 /10 = wheel B, likely) max {max(b) if b else '-'}"
+              "  [B = rear: gear test showed B 4-5 km/h while A was 0, bike presumably on a stand]")
     if 0x80 in by:
         L = [d for _, d in by[0x80]]
-        fb = sum(1 for d in L if d[0] & 1)
+        b0 = sum(1 for d in L if d[0] & 1)
+        ne = sum(1 for d in L if d[7] & 0x40)
         cl = sum(1 for d in L if d[7] & 4)
         ss = sum(1 for d in L if d[7] & 0x20)
-        print(f"   0x080: front brake on {fb}/{len(L)}, clutch {cl}/{len(L)}, side stand {ss}/{len(L)} frames;"
-              f" B1 (analog candidate) max {max(d[1] for d in L)}")
+        print(f"   0x080: B0 bit0 on {b0}/{len(L)} (unverified: on when engine off, was front brake), neutral B7 bit6 (likely) {ne}/{len(L)},"
+              f" clutch {cl}/{len(L)}, side stand {ss}/{len(L)} frames; B1 (analog candidate) max {max(d[1] for d in L)}")
+        print("   Neutral note: B7 bit6 is set in neutral, clears in 1st gear, and also clears when the kill switch is turned off (unresolved).")
     if 0x140 in by:
         v = [d[1] << 16 | d[2] << 8 | d[3] for _, d in by[0x140]]
         print(f"   0x140 24-bit counter (hypothesis, ECU-on time): {v[0]} -> {v[-1]}")
     if 0x211 in by:
         L = [d for _, d in by[0x211]]
-        print("   0x211 B0/B1/B2 deg C (raw-40, provisional): "
-              + " / ".join(f"{min(d[i] for d in L) - 40}..{max(d[i] for d in L) - 40}" for i in range(3)))
+        r0 = rng([d[0] - 40 for d in L])
+        r1 = rng([d[1] - 40 for d in L])
+        rv = rng([d[2] * 0.1 for d in L])
+        print(f"   Engine temp (0x211 B0 raw-40, likely): {r0[0]}..{r0[1]} C")
+        print(f"   Intake temp (0x211 B1 raw-40, likely): {r1[0]}..{r1[1]} C")
+        print(f"   Battery V (0x211 B2 x0.1, strong evidence): {rv[0]:.1f}..{rv[1]:.1f} V"
+              "  [13.8 running, ~12.4 engine off, ~11.2 cranking; pass/flash load dips it]")
+    print("   Not found on CAN: horn, high beam, low beam, pass/flash, rear brake (only the pass/flash electrical load shows as a battery-voltage dip).")
     for i in (0x280, 0x290, 0x450):
         if i in by:
             pay = Counter(d for _, d in by[i])
@@ -298,6 +344,81 @@ def tests(frames, marks, skip=frozenset({0x140})):
         print("  (candidates only, not identifications)")
 
 
+def dtc_decode(a, b):
+    """First byte bits 7-6: 00 P, 01 C, 10 B, 11 U; bits 5-4 first digit; bits 3-0 second digit; second byte = last two digits."""
+    return "PCBU"[a >> 6] + f"{(a >> 4) & 3:X}{a & 15:X}{b:02X}"
+
+
+def isotp_messages(frames):
+    """Reassemble ISO-TP messages sent by ECUs (0x7E8-0x7EF). Returns [(t, ecu_key, payload)]."""
+    st, out = {}, []
+    for t, k, d in frames:
+        if not (0x7E8 <= k <= 0x7EF) or not d:
+            continue
+        pci = d[0] >> 4
+        if pci == 0:
+            n = d[0] & 15
+            if 1 <= n <= 7 and len(d) >= 1 + n:
+                out.append((t, k, d[1:1 + n]))
+        elif pci == 1 and len(d) >= 3:
+            ln = ((d[0] & 15) << 8) | d[1]
+            if ln >= 8:
+                st[k] = [ln, bytearray(d[2:2 + ln]), 1, t]
+        elif pci == 2 and k in st:
+            ln, buf, sn, t0 = st[k]
+            if (d[0] & 15) != sn:
+                del st[k]
+                continue
+            buf.extend(d[1:1 + ln - len(buf)])
+            st[k][2] = (sn + 1) & 15
+            if len(buf) >= ln:
+                out.append((t0, k, bytes(buf)))
+                del st[k]
+    return out
+
+
+TXSVC = {0x01: "Mode 01 live data", 0x03: "Mode 03 read stored codes", 0x04: "Mode 04 CLEAR codes", 0x07: "Mode 07 read pending codes",
+         0x09: "Mode 09 vehicle info", 0x0A: "Mode 0A read permanent codes"}
+
+
+def diag_report(frames, marks, meta):
+    tx = meta["tx"]
+    modes = [(t, m) for t, m in marks if m in ("MODE_DIAGNOSTICS", "MODE_MONITOR")]
+    if not tx and not modes:
+        return
+    print(f"  Active diagnostics: {len(tx)} transmitted frame(s) (# TX). This capture is NOT purely listen-only"
+          " (the profile line describes the start of the recording).")
+    if meta["adapter"]:
+        print(f"   Adapter: {meta['adapter']}")
+    if modes:
+        print("   Mode changes: " + ", ".join(f"{m}@{t:.1f}s" for t, m in modes))
+    if tx:
+        c = Counter(fmt_id(k) for _, k, _, _ in tx)
+        print("   TX by ID: " + ", ".join(f"{i} x{n}" for i, n in sorted(c.items())))
+        for t, k, d, iso in tx[:20]:
+            body = d[1:1 + (d[0] & 15)] if (not iso and d and d[0] >> 4 == 0) else d
+            svc = TXSVC.get(body[0], "service 0x%02X" % body[0]) if body and not (d and d[0] >> 4 == 3 and not iso) else "ISO-TP flow control"
+            print(f"    {t:9.3f}s TX {fmt_id(k)} {' '.join(f'{x:02X}' for x in d)}  [{svc}]")
+        if len(tx) > 20:
+            print(f"    ... {len(tx) - 20} more")
+        clears = [t for t, k, d, iso in tx if (d[:2] == b"\x01\x04" and not iso) or (iso and d[:1] == b"\x04")]
+        if clears:
+            print("   WARNING: Mode 04 (clear fault codes) was requested at " + ", ".join(f"{t:.1f}s" for t in clears)
+                  + ". Readiness monitors and freeze-frame data were reset on the vehicle.")
+    kinds = {0x43: "stored", 0x47: "pending", 0x4A: "permanent"}
+    for t, k, p in isotp_messages(frames):
+        if p and p[0] in kinds:
+            body = p[1:]
+            if len(body) % 2:
+                body = body[1:]
+            codes = [dtc_decode(body[i], body[i + 1]) for i in range(0, len(body) - 1, 2) if body[i] or body[i + 1]]
+            print(f"   {kinds[p[0]]} codes from ECU {fmt_id(k)} at {t:.1f}s: {', '.join(codes) if codes else 'none'}")
+        elif p and p[:2] == b"\x49\x02":
+            print(f"   VIN from ECU {fmt_id(k)}: {bytes(x for x in p[3:] if 32 <= x < 127).decode()}")
+        elif p and p[0] == 0x44:
+            print(f"   Mode 04 positive response from ECU {fmt_id(k)} at {t:.1f}s")
+
+
 def gaps(marks):
     ev = [(t, m) for t, m in marks if m in ("DISCONNECT", "RECONNECT", "USER_DISCONNECT")]
     if ev:
@@ -329,6 +450,7 @@ def main(paths):
         if meta["health"]:
             print("  Recorded " + meta["health"])
         gaps(marks)
+        diag_report(frames, marks, meta)
         tests(frames, marks, frozenset({0x140}) if hunter else frozenset())
 
 

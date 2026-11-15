@@ -77,6 +77,7 @@ public final class CanEngine implements FrameListener {
         public int rateKbps;
         public IdFormat fmt;
         public Dashboard dash;
+        public BatteryMonitor.View battery;
         public Hero hero;
         public List<StatsTable.Row> rows;
         public List<ObdValue> obd;
@@ -116,6 +117,7 @@ public final class CanEngine implements FrameListener {
     private Runnable settingsListener;
 
     // health (parser counters live in the parser)
+    private final BatteryMonitor battery = new BatteryMonitor();
     private long hGaps, hCtrJump, hDlcOdd, hFiltered, hObdReq, hDtcResp;
     private final Map<Long, Integer> hUnknown = new LinkedHashMap<>();
     private double loadBits;
@@ -187,6 +189,10 @@ public final class CanEngine implements FrameListener {
         lastFrameAt = now;
         if ((stats.onFrame(key, data, now) & StatsTable.GAP_FLAG) != 0) hGaps++;
         VehicleProfile p = settings.profile();
+        if (p.isHunter() && !ext) {
+            if (key == 0x100 && data.length >= 6) battery.onRpm((data[4] & 0xFF) << 8 | (data[5] & 0xFF), now / 1_000_000L);
+            else if (key == 0x211 && data.length >= 3) battery.onVolts(BatteryMonitor.voltsFromRaw(data[2]), now / 1_000_000L);
+        }
         if (p.tracksUnknown()) {
             boolean known = p.isKnown(key);
             if (!known) {
@@ -298,9 +304,27 @@ public final class CanEngine implements FrameListener {
             if (!Bitrates.isValid(kbps)) return;
             settings.setRate(settings.profile, kbps);
             resetLiveLocked();
+            hGaps = 0;
             l = settingsListener;
         }
         fire(l);
+    }
+
+    /**
+     * The frame stream was interrupted on purpose or by the link (connect, disconnect, bitrate trial, rate change):
+     * the next frame of an ID must not be compared with the last one before the break, and gaps counted while the
+     * link was being set up do not describe the bus. Called by the link layer.
+     */
+    public void discontinuity() {
+        synchronized (lock) {
+            stats.markDiscontinuity();
+            hGaps = 0;
+        }
+    }
+
+    /** Battery voltage state (Hunter profile only). */
+    public BatteryMonitor.View batteryView(long nowNs) {
+        return battery.view(nowNs / 1_000_000L);
     }
 
     public void setIdFormat(IdFormat f) {
@@ -392,6 +416,7 @@ public final class CanEngine implements FrameListener {
         stats.reset();
         obd.clear();
         uv.clear();
+        battery.resetAll();
         framesParsed = 0;
         lastFrameAt = -1;
         parser.reset();
@@ -422,6 +447,8 @@ public final class CanEngine implements FrameListener {
         synchronized (lock) {
             linked = up;
             if (up) connAt = nowNs;
+            stats.markDiscontinuity();
+            hGaps = 0;
         }
     }
 
@@ -438,6 +465,7 @@ public final class CanEngine implements FrameListener {
             if (writer != null) return false;
             recLabel = Text.cleanOr(label, "capture");
             recStartNs = nowNs;
+            battery.resetMinMax();
             writer = new CaptureWriter(out, CaptureFormat.headerLines(recLabel, isoStart, settings.profile(), settings.rate(),
                     settings.fmt(), settings.signals()));
             return true;
@@ -577,6 +605,7 @@ public final class CanEngine implements FrameListener {
         h.overflow = parser.overflows;
         h.rtr = parser.rtr;
         h.gaps = hGaps;
+        h.batterySuffix = battery.healthSuffix();
         h.ctrJump = hCtrJump;
         h.dlcOdd = hDlcOdd;
         h.filtered = hFiltered;
@@ -656,7 +685,7 @@ public final class CanEngine implements FrameListener {
             d = stats.last(0x12B);
             if (d != null && d.length > 1 && !((d[0] & 0xFF) == 0xFF && (d[1] & 0xFF) == 0xFF)) {
                 h.speed = ((d[0] & 0xFF) << 8 | (d[1] & 0xFF)) / 10.0;
-                h.speedSrc = "wheel A";
+                h.speedSrc = "front wheel";
             }
             d = stats.last(0x150);
             if (d != null && d.length > 0) h.gear = Dashboard.gearName(d[0] & 0xFF);
@@ -692,6 +721,7 @@ public final class CanEngine implements FrameListener {
             s.rateKbps = settings.rate();
             s.fmt = settings.fmt();
             s.dash = p.isHunter() ? Dashboard.from(stats) : new Dashboard();
+            s.battery = p.isHunter() ? battery.view(nowNs / 1_000_000L) : new BatteryMonitor.View();
             s.hero = heroLocked(nowNs);
             s.rows = stats.rows(nowNs);
             Map<String, String> names = settings.signals().names;

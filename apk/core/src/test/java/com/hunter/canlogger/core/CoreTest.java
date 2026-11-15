@@ -225,6 +225,9 @@ public final class CoreTest {
         testRoundTripHunter(sample);
         testLegacyLogs();
         testReconnectEvents();
+        testRealCaptures(samplePath);
+        testBatteryThresholds();
+        testGapRule();
         testSourceAudit();
 
         System.out.println("\n" + passed + " passed, " + failed + " failed");
@@ -760,7 +763,7 @@ public final class CoreTest {
         q.linked().adv(4000);
         check("health: no frames for 3 s after connect -> WARN with advice", q.e.status(q.t).reasons.get(0).contains("No frames for 3 s"));
         String line = CaptureFormat.healthLine(r.e.health(), 0.264);
-        check("HEALTH line format", line.matches("^# HEALTH bad=\\d+ resync=\\d+ bel=\\d+ overflow=\\d+ gaps=\\d+ ctrjump=\\d+ load=26 filtered=\\d+$"), line);
+        check("HEALTH line format", line.matches("^# HEALTH bad=\\d+ resync=\\d+ bel=\\d+ overflow=\\d+ gaps=\\d+ ctrjump=\\d+ load=26 filtered=\\d+( vmin=\\d+\\.\\d vmax=\\d+\\.\\d( crankmin=\\d+\\.\\d)?)?$"), line);
     }
 
     static void testLoadAndGaps() {
@@ -1067,6 +1070,215 @@ public final class CoreTest {
 
     // ------------------------------------------------------------------ stats and dashboard
 
+    // ------------------------------------------------------------------ real Hunter captures (user's bike, 2026-11-15)
+
+    /** Capture data lines as {time seconds, slcan text}. Header, MARK and HEALTH lines are skipped. */
+    static List<Object[]> cap(String dir, String name) throws IOException {
+        List<Object[]> out = new ArrayList<>();
+        for (String line : Files.readAllLines(Paths.get(dir, "real", name), L1)) {
+            if (line.isEmpty() || line.charAt(0) == '#') continue;
+            String[] p = line.trim().split("\\s+");
+            int n = Integer.parseInt(p[2]);
+            int[] d = new int[n];
+            for (int i = 0; i < n; i++) d[i] = Integer.parseInt(p[3 + i], 16);
+            out.add(new Object[]{Double.parseDouble(p[0]), fr(Integer.parseInt(p[1], 16), d)});
+        }
+        return out;
+    }
+
+    /** Feeds frames with from <= t < to at their recorded times (rig clock = base + t). */
+    static void feed(Rig r, long base, List<Object[]> cap, double from, double to) {
+        for (Object[] f : cap) {
+            double t = (Double) f[0];
+            if (t < from || t >= to) continue;
+            r.t = base + (long) (t * 1e9);
+            r.send((String) f[1]);
+        }
+    }
+
+    static final String HORN = "hunter_Horn_20261115T072421.txt", IGN = "hunter_Ignition_on_20261115T073249.txt",
+            OFF = "hunter_EngineOff_capture_20261115T073230.txt", GEAR1 = "hunter_gear_1_20261115T073306.txt",
+            KILL = "hunter_Kill_Switch_20261115T072832.txt", FBRAKE = "hunter_Front_Brake_20261115T072224.txt",
+            PASS = "hunter_Pass_Flash_20261115T072508.txt";
+
+    static void testRealCaptures(String samplePath) throws Exception {
+        String dir = new File(samplePath).getParent();
+        long base = 100_000_000_000L;
+
+        // 6. gaps: the Horn capture was clean (the old app reported gaps=25 for it)
+        List<Object[]> horn = cap(dir, HORN);
+        Rig h = new Rig();
+        h.t = base;
+        h.linked();
+        feed(h, base, horn, 0, 99);
+        check("real Horn capture: 0 bad frames and gaps = 0 (was 25 in the old app's HEALTH line)", h.e.health().gaps == 0 && h.e.health().bad == 0, "gaps=" + h.e.health().gaps);
+        for (String n : new String[]{IGN, OFF, GEAR1, KILL, FBRAKE, PASS}) {
+            Rig g = new Rig();
+            g.linked();
+            feed(g, g.t, cap(dir, n), 0, 99);
+            check("real capture " + n.substring(7, n.length() - 4) + ": gaps = 0", g.e.health().gaps == 0, "gaps=" + g.e.health().gaps);
+        }
+
+        // Dashboard decoders on real frames
+        Rig e1 = new Rig();
+        e1.linked();
+        List<Object[]> gear = cap(dir, GEAR1);
+        long b1 = e1.t;
+        feed(e1, b1, gear, 0, 1.0);
+        Dashboard d = e1.e.snapshot(e1.t).dash;
+        check("real gear-1 test, neutral phase: neutral pill on, gear N, wheels 0.0, battery 13.7-13.8 V",
+                d.neutral && d.gear.equals("N") && d.wheelFront.equals("0.0") && d.wheelRear.equals("0.0") && (d.batteryV.equals("13.7") || d.batteryV.equals("13.8")), d.neutral + " " + d.gear + " " + d.wheelFront + " " + d.wheelRear + " " + d.batteryV);
+        int eng = Integer.parseInt(d.engineTemp), in = Integer.parseInt(d.intakeTemp);
+        check("real gear-1 test: engine temp 55..58 C and intake temp 35..38 C (raw-40)", eng >= 55 && eng <= 58 && in >= 35 && in <= 38, eng + " " + in);
+        check("real gear-1 test: B0 bit0 off with the engine running", !d.b0bit0);
+        feed(e1, b1, gear, 1.0, 3.1);
+        d = e1.e.snapshot(e1.t).dash;
+        check("real gear-1 test, 1st gear engaged: gear 1, neutral bit cleared, REAR wheel 5.0 km/h while FRONT wheel 0.0 (bike on stand)", d.gear.equals("1") && !d.neutral && d.wheelRear.equals("5.0") && d.wheelFront.equals("0.0"), d.gear + " " + d.neutral + " " + d.wheelRear + " " + d.wheelFront);
+
+        Rig e2 = new Rig();
+        e2.linked();
+        feed(e2, e2.t, cap(dir, OFF), 0, 99);
+        d = e2.e.snapshot(e2.t).dash;
+        check("real engine-off capture: RPM 0, B0 bit0 on, battery 12.4 V", d.rpm.equals("0") && d.b0bit0 && d.batteryV.matches("12\\.[45]"), d.rpm + " " + d.b0bit0 + " " + d.batteryV);
+        Rig e3 = new Rig();
+        e3.linked();
+        feed(e3, e3.t, cap(dir, FBRAKE), 0, 99);
+        check("real front-brake capture (engine running): B0 bit0 never on", !e3.e.snapshot(e3.t).dash.b0bit0);
+        check("Hunter byte labels: 0x080 B0 unverified, 0x12B B2 rear, 0x211 B2 battery",
+                Dashboard.knownLabel("0x80 B0").equals("unverified: on when engine off (was front brake)") && Dashboard.knownLabel("0x12B B2").startsWith("Rear wheel")
+                        && Dashboard.knownLabel("0x211 B2").contains("Battery") && Dashboard.knownLabel("0x211 B0").startsWith("Engine temp"));
+
+        // Battery state machine on the real ignition capture (running -> kill switch -> engine off -> start)
+        List<Object[]> ign = cap(dir, IGN);
+        Rig b = new Rig();
+        b.linked();
+        long bb = b.t;
+        feed(b, bb, ign, 0, 1.0);
+        BatteryMonitor.View v = b.e.batteryView(b.t);
+        check("real ignition capture t=1 s: running, 13.4 V is Check charging (between 13.0 and 13.5)", v.state == BatteryMonitor.State.RUNNING && v.label.equals("Check charging") && Math.abs(v.volts - 13.4) < 0.11, v.state + " " + v.label + " " + v.volts);
+        feed(b, bb, ign, 1.0, 3.0);
+        v = b.e.batteryView(b.t);
+        check("real ignition capture t=3 s: RPM 0 for under 2 s is 'Engine just stopped'", v.state == BatteryMonitor.State.SETTLING, v.state + "");
+        feed(b, bb, ign, 3.0, 4.6);
+        v = b.e.batteryView(b.t);
+        check("real ignition capture t=4.6 s: engine off, 12.5 V is Fair", v.state == BatteryMonitor.State.OFF && v.label.equals("Fair") && v.level == BatteryMonitor.Level.WARN && Math.abs(v.volts - 12.5) < 0.11, v.state + " " + v.label + " " + v.volts);
+        feed(b, bb, ign, 4.6, 5.5);
+        v = b.e.batteryView(b.t);
+        check("real ignition capture t=5.5 s: cranking, minimum so far near 11.3 V", v.state == BatteryMonitor.State.CRANKING && !Double.isNaN(v.crankMin) && v.crankMin < 11.6, v.state + " " + v.crankMin);
+        feed(b, bb, ign, 5.5, 99);
+        v = b.e.batteryView(b.t);
+        check("real ignition capture end: cranking min 11.2 V is 'Start: good'", Math.abs(v.crankMin - 11.2) < 0.11 && v.crankLabel.equals("Start: good") && v.crankLevel == BatteryMonitor.Level.OK, v.crankMin + " " + v.crankLabel);
+        check("real ignition capture end: running 12.9 V (still recovering) is Low charge", v.state == BatteryMonitor.State.RUNNING && v.label.equals("Low charge"), v.state + " " + v.label + " " + v.volts);
+        check("real ignition capture: min/max volts 11.2 / 13.6", Math.abs(v.vMin - 11.2) < 0.05 && Math.abs(v.vMax - 13.6) < 0.05, v.vMin + " " + v.vMax);
+
+        Rig rn = new Rig();
+        rn.linked();
+        feed(rn, rn.t, horn, 0, 99);
+        v = rn.e.batteryView(rn.t);
+        check("real Horn capture (engine running, ~13.8 V): Charging OK", v.state == BatteryMonitor.State.RUNNING && v.label.equals("Charging OK") && v.level == BatteryMonitor.Level.OK && Math.abs(v.volts - 13.8) < 0.11, v.label + " " + v.volts);
+        Rig ro = new Rig();
+        ro.linked();
+        feed(ro, ro.t, cap(dir, OFF), 0, 99);
+        v = ro.e.batteryView(ro.t);
+        check("real engine-off capture (~12.4 V, RPM 0): OFF state, Fair", v.state == BatteryMonitor.State.OFF && v.label.equals("Fair") && Math.abs(v.volts - 12.4) < 0.11, v.state + " " + v.label + " " + v.volts);
+        Rig rp = new Rig();
+        rp.linked();
+        feed(rp, rp.t, cap(dir, PASS), 0, 99);
+        check("real Pass/Flash capture: load dip shows as min voltage <= 13.0 V while running", rp.e.batteryView(rp.t).vMin <= 13.0 && rp.e.batteryView(rp.t).vMax >= 13.7, rp.e.batteryView(rp.t).vMin + "");
+
+        // HEALTH footer in a recorded capture carries volts min/max/crank min
+        Rig rec = new Rig();
+        rec.linked();
+        long rb = rec.t;
+        List<String> lines = recordLines(rec, () -> feed(rec, rb, ign, 0, 99));
+        String hl = lines.get(lines.size() - 1);
+        check("recorded HEALTH footer has vmin=11.2 vmax=13.6 crankmin=11.2 and gaps=0", hl.startsWith("# HEALTH bad=0") && hl.contains(" gaps=0 ") && hl.contains(" vmin=11.2 vmax=13.6") && hl.contains(" crankmin=11.2"), hl);
+        Rig nb = new Rig();
+        nb.linked();
+        check("HEALTH footer without voltage data has no vmin", !CaptureFormat.healthLine(nb.e.health(), 0).contains("vmin"));
+        Rig car = new Rig();
+        car.profile("car");
+        car.linked();
+        car.send(fr(0x211, 1, 2, 0x7F, 0, 0, 0, 0, 0));
+        check("non-Hunter profile: 0x211 is not decoded as battery", Double.isNaN(car.e.batteryView(car.t).volts));
+    }
+
+    static void testBatteryThresholds() {
+        check("engine-off zones: 12.6 Good, 12.2 Fair, 12.1 Low, 11.8 Low, 11.7 Poor",
+                BatteryMonitor.offLabel(12.6).equals("Good") && BatteryMonitor.offLabel(12.4).equals("Fair") && BatteryMonitor.offLabel(12.2).equals("Fair")
+                        && BatteryMonitor.offLabel(12.1).equals("Low") && BatteryMonitor.offLabel(11.8).equals("Low") && BatteryMonitor.offLabel(11.7).equals("Poor"));
+        check("running zones: 13.5-14.8 Charging OK, 13.0-13.5 / 14.8-15.2 Check, <13 Low charge, >15.2 Overcharge",
+                BatteryMonitor.runLabel(13.8).equals("Charging OK") && BatteryMonitor.runLabel(13.5).equals("Charging OK") && BatteryMonitor.runLabel(14.8).equals("Charging OK")
+                        && BatteryMonitor.runLabel(13.2).equals("Check charging") && BatteryMonitor.runLabel(15.0).equals("Check charging")
+                        && BatteryMonitor.runLabel(12.9).equals("Low charge") && BatteryMonitor.runLabel(15.3).equals("Overcharge"));
+        check("cranking zones: 9.6 good, 9.0 weak, 8.9 poor",
+                BatteryMonitor.crankLabelOf(11.2).equals("Start: good") && BatteryMonitor.crankLabelOf(9.6).equals("Start: good") && BatteryMonitor.crankLabelOf(9.3).equals("Start: weak")
+                        && BatteryMonitor.crankLabelOf(9.0).equals("Start: weak") && BatteryMonitor.crankLabelOf(8.9).equals("Start: poor battery"));
+        check("levels carry meaning besides colour: Good OK, Fair WARN, Poor BAD; Overcharge BAD",
+                BatteryMonitor.offLevel(12.7) == BatteryMonitor.Level.OK && BatteryMonitor.offLevel(12.4) == BatteryMonitor.Level.WARN && BatteryMonitor.offLevel(11.0) == BatteryMonitor.Level.BAD
+                        && BatteryMonitor.runLevel(16.0) == BatteryMonitor.Level.BAD);
+        check("voltage decode: raw 0x8A = 13.8 V, 0x7C = 12.4 V, 0x70 = 11.2 V", Math.abs(BatteryMonitor.voltsFromRaw(0x8A) - 13.8) < 1e-9 && Math.abs(BatteryMonitor.voltsFromRaw(0x7C) - 12.4) < 1e-9 && Math.abs(BatteryMonitor.voltsFromRaw(0x70) - 11.2) < 1e-9);
+        BatteryMonitor m = new BatteryMonitor();
+        check("no data: no verdict", m.view(0).state == BatteryMonitor.State.NO_DATA && m.view(0).level == BatteryMonitor.Level.NONE);
+        m.onVolts(12.4, 100);
+        check("voltage without RPM: voltage only, no verdict", m.view(150).state == BatteryMonitor.State.NO_RPM && m.view(150).level == BatteryMonitor.Level.NONE);
+        m.onRpm(0, 200);
+        m.onVolts(12.4, 2300);
+        m.onRpm(0, 2300);
+        check("RPM 0 for > 2 s: engine off verdict", m.view(2400).state == BatteryMonitor.State.OFF && m.view(2400).label.equals("Fair"));
+        m.onVolts(10.9, 2400);
+        m.onRpm(600, 2450);
+        m.onVolts(9.4, 2500);
+        m.onVolts(11.5, 3000);
+        BatteryMonitor.View v = m.view(3100);
+        check("start from engine off: cranking, minimum includes the dip just before RPM rose, 9.4 V is weak", v.state == BatteryMonitor.State.CRANKING && v.crankMin == 9.4 && v.crankLabel.equals("Start: weak"), v.crankMin + " " + v.crankLabel);
+        m.onVolts(14.1, 6000);
+        m.onRpm(1100, 6000);
+        v = m.view(6000);
+        check("after the 3 s crank window: running, Charging OK, cranking min kept", v.state == BatteryMonitor.State.RUNNING && v.label.equals("Charging OK") && v.crankMin == 9.4);
+        check("stale voltage (> 2 s old) gives no verdict", m.view(9000).state == BatteryMonitor.State.NO_DATA);
+        BatteryMonitor m2 = new BatteryMonitor();
+        m2.onRpm(1000, 0);
+        m2.onVolts(13.9, 10);
+        m2.onRpm(0, 500);
+        m2.onRpm(900, 900);
+        check("RPM returning within 2 s (stall/blip) is not a cranking event", Double.isNaN(m2.view(1000).crankMin) && m2.view(1000).state == BatteryMonitor.State.RUNNING);
+    }
+
+    static void testGapRule() {
+        // Slow IDs (< 5 Hz) never count gaps; fast IDs count only a real > 1 s silence.
+        StatsTable st = new StatsTable();
+        int flags = 0;
+        long t = 0;
+        for (int i = 0; i < 20; i++) { t += 1_000_000_000L; flags |= st.onFrame(0x300, B(1), t); }
+        t += 3_000_000_000L;
+        flags |= st.onFrame(0x300, B(1), t);
+        check("gap rule: a 1 Hz ID with a 3 s pause is not a gap (not >= 5 Hz)", flags == 0 && st.gapCount(0x300) == 0);
+        StatsTable s2 = new StatsTable();
+        t = 0;
+        for (int i = 0; i < 40; i++) { t += 100_000_000L; s2.onFrame(0x211, B(1), t); }
+        t += 1_200_000_000L;
+        int f = s2.onFrame(0x211, B(1), t);
+        check("gap rule: a 10 Hz ID silent for 1.2 s is a gap", f == StatsTable.GAP_FLAG && s2.gapCount(0x211) == 1);
+        // link break: the silence between disconnect and reconnect is not a bus gap
+        Rig r = new Rig();
+        r.linked();
+        for (int i = 0; i < 200; i++) r.adv(10).send(fr(0x100, 0, 0, 0, 0, 4, 0xB0, 0, 0));
+        r.e.setLinked(false, r.t);
+        r.adv(5000);
+        r.e.setLinked(true, r.t);
+        for (int i = 0; i < 200; i++) r.adv(10).send(fr(0x100, 0, 0, 0, 0, 4, 0xB0, 0, 0));
+        check("gap rule: disconnect/reconnect (5 s) does not count as a gap", r.e.health().gaps == 0 && r.e.stats().gapCount(0x100) == 0, "gaps=" + r.e.health().gaps);
+        // bitrate auto-detect trial silence
+        Rig q = new Rig();
+        q.linked();
+        for (int i = 0; i < 200; i++) q.adv(10).send(fr(0x100, 0, 0, 0, 0, 4, 0xB0, 0, 0));
+        q.e.discontinuity();
+        q.adv(4000);
+        for (int i = 0; i < 50; i++) q.adv(10).send(fr(0x100, 0, 0, 0, 0, 4, 0xB0, 0, 0));
+        check("gap rule: discontinuity() (bitrate detection) suppresses the false gap", q.e.health().gaps == 0);
+    }
+
     static void testStatsAndDashboard() {
         Rig r = new Rig();
         r.t = 10_000_000_000L;
@@ -1075,10 +1287,11 @@ public final class CoreTest {
         String f120 = fr(0x120, 0xA0, 0, 0, 0, 0, 0, 0, 0);
         r.send(f100 + f150 + f12b + f080 + f140 + f211 + f120);
         CanEngine.Snapshot s = r.e.snapshot(r.t + 100_000_000L);
-        check("dashboard decode: RPM 3996, gear 1, wheel A 90.0, wheel B dash, brake/clutch/stand on, B1 = 7",
-                s.dash.rpm.equals("3996") && s.dash.gear.equals("1") && s.dash.wheelA.equals("90.0") && s.dash.wheelB.equals(Dashboard.DASH)
-                        && s.dash.frontBrake && s.dash.clutch && s.dash.sideStand && s.dash.b1.equals("7"), s.dash.rpm + " " + s.dash.gear + " " + s.dash.wheelA);
-        check("dashboard decode: counter 123456, temps 36 / 37 / 87, MAP 1600", s.dash.counter.equals("123456") && s.dash.temps.equals("36 / 37 / 87") && s.dash.map.equals("1600"));
+        check("dashboard decode: RPM 3996, gear 1, front wheel 90.0, rear wheel dash, B0 bit0/clutch/stand on, neutral off, B1 = 7",
+                s.dash.rpm.equals("3996") && s.dash.gear.equals("1") && s.dash.wheelFront.equals("90.0") && s.dash.wheelRear.equals(Dashboard.DASH)
+                        && s.dash.b0bit0 && s.dash.clutch && s.dash.sideStand && !s.dash.neutral && s.dash.b1.equals("7"), s.dash.rpm + " " + s.dash.gear + " " + s.dash.wheelFront);
+        check("dashboard decode: counter 123456, engine 36 C, intake 37 C, battery 12.7 V, MAP 1600",
+                s.dash.counter.equals("123456") && s.dash.engineTemp.equals("36") && s.dash.intakeTemp.equals("37") && s.dash.batteryV.equals("12.7") && s.dash.map.equals("1600"));
         check("gear map incl. unknown", Dashboard.gearName(0).equals("N") && Dashboard.gearName(0x38).equals("init") && Dashboard.gearName(0x99).equals("0x99"));
         check("raw table rows sorted by ID, 7 IDs", s.rows.size() == 7 && s.rows.get(0).key == 0x80 && s.rows.get(6).key == 0x211);
         check("all 7 Hunter IDs are known (no unknown IDs)", s.health.unknown.isEmpty());
@@ -1216,7 +1429,7 @@ public final class CoreTest {
         check("analyzer round trip (Hunter): 42580 frames re-read from the recorded file", find(out, "42580 frames over") && find(out, "Profile: Hunter 350, 500 kbps"), out.substring(0, 300));
         boolean same = true;
         String why = "";
-        for (String re : new String[]{"RPM \\(0x100 B4:B5, confirmed\\): min \\d+ max \\d+", "Gear \\(0x150 B0, confirmed\\): .*", "Wheel A km/h.*", "0x140 24-bit counter.*", "0x211 B0/B1/B2 deg C.*"}) {
+        for (String re : new String[]{"RPM \\(0x100 B4:B5, confirmed\\): min \\d+ max \\d+", "Gear \\(0x150 B0, confirmed\\): .*", "Front wheel km/h.*", "0x140 24-bit counter.*", "Engine temp.*", "Intake temp.*", "Battery V.*"}) {
             String x = grab(out, re), y = grab(ref, re);
             if (x == null || !x.equals(y)) { same = false; why += " [" + re + ": " + x + " vs " + y + "]"; }
         }

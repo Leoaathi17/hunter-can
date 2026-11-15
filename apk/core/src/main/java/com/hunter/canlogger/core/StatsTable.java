@@ -105,6 +105,15 @@ public final class StatsTable {
     private long lastFrameNs = -1;
 
     public static final int GAP_FLAG = 1;
+    /** Longest typical period (ms) of an ID that counts as running at >= 5 Hz (200 ms plus jitter margin). */
+    public static final double FAST_ID_MAX_PERIOD_MS = 220.0;
+
+    static boolean isFastId(double perMs) { return perMs > 0 && perMs <= FAST_ID_MAX_PERIOD_MS; }
+
+    /** Forget the time of each ID's last frame so a break in the stream is not counted as a gap. */
+    public synchronized void markDiscontinuity() {
+        for (Stat s : ids.values()) { s.seenNs = -1; s.gapAtNs = -1; }
+    }
 
     /** Records one frame. Returns GAP_FLAG when this frame ended a gap on a periodic ID. */
     public synchronized int onFrame(long key, byte[] data, long nowNs) {
@@ -121,7 +130,8 @@ public final class StatsTable {
         if (s.seenNs >= 0) {
             double dt = (nowNs - s.seenNs) / NS_PER_MS;
             double thr = Math.max(1000.0, 5 * s.perMs);
-            if (s.n > 6 && dt > thr) {
+            // Only an ID that normally runs at >= 5 Hz can have a "gap"; slower IDs are not expected to be continuous.
+            if (s.n > 6 && isFastId(s.perMs) && dt > thr) {
                 s.gapN++;
                 if (dt > s.gapMaxMs) s.gapMaxMs = dt;
                 s.gapAtNs = nowNs;
@@ -339,7 +349,7 @@ public final class StatsTable {
     public synchronized List<Long> stalled(long nowNs) {
         List<Long> out = new ArrayList<>();
         for (Stat s : ids.values()) {
-            if (s.n > 6 && s.perMs > 0 && s.perMs < 1000 && (nowNs - s.seenNs) / NS_PER_MS > Math.max(1000.0, 5 * s.perMs)) out.add(s.key);
+            if (s.n > 6 && s.seenNs >= 0 && isFastId(s.perMs) && (nowNs - s.seenNs) / NS_PER_MS > Math.max(1000.0, 5 * s.perMs)) out.add(s.key);
         }
         return out;
     }
@@ -380,7 +390,7 @@ public final class StatsTable {
         long sec = nowNs / 1_000_000_000L;
         for (Stat s : ids.values()) {
             if (out.size() >= maxRows) break;
-            Timeline t = new Timeline(s.key, s.perMs > 0 && s.perMs < 1000, s.gapN, s.gapMaxMs);
+            Timeline t = new Timeline(s.key, isFastId(s.perMs), s.gapN, s.gapMaxMs);
             for (int c = 0; c < 30; c++) {
                 long sc = sec - 30 + c;
                 if (sc < s.firstSec) { t.counts[c] = -1; continue; }

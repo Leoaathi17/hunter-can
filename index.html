@@ -188,14 +188,33 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
   <div data-prof="hunter" class="card">
     <h2>Hunter 350 signals</h2>
     <div class="grid2">
-      <div class="tile"><div class="k">Wheel A km/h <span class="tag t-ok">scale ok</span></div><div class="v" id="wa">–</div></div>
-      <div class="tile"><div class="k">Wheel B km/h <span class="tag t-cand">rear? unconfirmed</span></div><div class="v" id="wb">–</div></div>
+      <div class="tile"><div class="k">Front wheel km/h <span class="tag t-cand">likely</span></div><div class="v" id="wa">–</div></div>
+      <div class="tile"><div class="k">Rear wheel km/h <span class="tag t-cand">likely</span></div><div class="v" id="wb">–</div></div>
       <div class="tile"><div class="k">0x080 B1 analog <span class="tag t-cand">candidate</span></div><div class="v" id="b1">–</div></div>
       <div class="tile"><div class="k">0x140 counter (24-bit) <span class="tag t-cand">hypothesis</span></div><div class="v" id="ctr">–</div></div>
-      <div class="tile"><div class="k">0x211 B0 / B1 / B2 °C <span class="tag t-cand">raw-40 provisional</span></div><div class="v" id="tmp" style="font-size:20px">–</div></div>
+      <div class="tile"><div class="k">Engine temp °C <span class="tag t-cand">likely</span></div><div class="v" id="engT">–</div></div>
+      <div class="tile"><div class="k">Intake temp °C <span class="tag t-cand">likely</span></div><div class="v" id="intT">–</div></div>
+      <div class="tile"><div class="k">Battery V <span class="tag t-ok">strong evidence</span></div><div class="v" id="batV">–</div></div>
       <div class="tile"><div class="k">0x120 B0 MAP mbar <span class="tag t-cand">candidate</span></div><div class="v" id="map">–</div></div>
     </div>
-    <div style="margin-top:8px"><span class="pill" id="pFb">Front brake</span><span class="pill" id="pCl">Clutch</span><span class="pill" id="pSs">Side stand</span></div>
+    <div style="margin-top:8px"><span class="pill" id="pB0">B0 bit0 (engine-off?)</span><span class="pill" id="pNe">Neutral (likely)</span><span class="pill" id="pCl">Clutch</span><span class="pill" id="pSs">Side stand</span></div>
+    <p class="note">0x080 B0 bit0 was labelled front brake, but it never turned on in front-brake captures with the engine running; it is on whenever the engine is off. Neutral (0x080 B7 bit6) also clears when the kill switch is turned off: unresolved. Horn, high beam, low beam, pass/flash and rear brake were not found on CAN (only the electrical load of pass/flash shows as a battery-voltage dip on 0x211 B2).</p>
+  </div>
+
+  <div data-prof="hunter" class="card" id="batCard">
+    <h2>Battery</h2>
+    <div class="arcbox" id="batBox" role="img" aria-label="Battery voltage gauge, no data">
+      <svg viewBox="0 -10 200 186" aria-hidden="true">
+        <g id="batTicks"></g>
+        <path class="arc-track" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57"/>
+        <path id="batArc" class="arc-val" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" pathLength="270" stroke-dasharray="0 400" style="stroke:var(--acc)"/>
+        <line id="batNeedle" x1="100" y1="100" x2="100" y2="100" stroke="#e9f4ff" stroke-width="3" stroke-linecap="round" visibility="hidden"/>
+      </svg>
+      <div class="arc-c"><div class="big" id="batBig">–</div><div class="u">V</div><div id="batState" style="font-weight:700;margin-top:4px">No voltage</div></div>
+    </div>
+    <div id="batCrank" style="font:14px var(--mono);margin-top:6px">Cranking min: – (start the engine to measure)</div>
+    <div class="note" id="batMM"></div>
+    <p class="note" id="batNote"></p>
   </div>
 
   <div data-prof="car custom" class="card">
@@ -450,7 +469,7 @@ canvas#gapCv{width:100%;display:block;background:rgba(3,8,16,.6);border-radius:1
 
 <script id="app">
 "use strict";
-const APP="hunter-can-live",APPV=3;
+const APP="hunter-can-live",APPV="3.1";
 const VID=0x16D0,PID=0x117E;
 // ---------- safety: adapter command allow-list ----------
 // MODE "monitor" (default): only C, S0..S8, M1, O, V (USBtin style: C, S, L, V). A 't'/'T' data frame, S9+, M0, etc. are rejected. Never CAN data.
@@ -504,11 +523,92 @@ let lastFrameAt=0,connAt=0,detecting=false;
 const FR={total:0};
 const H={bad:0,resync:0,bel:0,overflow:0,stale:0,ctrJump:0,dlcOdd:0,filtered:0,rtr:0,obdReq:0,dtcResp:0,unknown:new Map()};
 const L={bits:0,t:0,load:0};
+
+// ---------- battery voltage state (0x211 B2 x 0.1 V, engine state from 0x100 RPM) ----------
+// Voltage-state indicator, NOT a battery state-of-health measurement. Keep the numbers in step with BatteryMonitor.java.
+// BAT_T: typical 12 V lead-acid thresholds, unverified for this bike. Tune here only.
+const BAT_T={
+  OFF_GOOD_V:12.6,OFF_FAIR_V:12.2,OFF_POOR_V:11.8,          // engine off: >=12.6 Good, 12.2-12.6 Fair, <12.2 Low, <11.8 Poor
+  RUN_OK_LO:13.5,RUN_OK_HI:14.8,RUN_CHECK_LO:13.0,RUN_CHECK_HI:15.2, // running: 13.5-14.8 Charging OK, 13.0-13.5 / 14.8-15.2 Check, <13.0 Low charge, >15.2 Overcharge
+  CRANK_GOOD_V:9.6,CRANK_WEAK_V:9.0,                         // cranking minimum: >=9.6 good, 9.0-9.6 weak, <9.0 poor
+  ENGINE_OFF_AFTER_MS:2000,CRANK_WINDOW_MS:3000,CRANK_PRE_MS:500,STALE_MS:2000,
+  GAUGE_MIN_V:10,GAUGE_MAX_V:16,
+  TAG:"typical 12 V lead-acid thresholds, unverified for this bike",
+  DISCLAIMER:"Voltage state only, not a battery health test."
+};
+const BAT={v:NaN,vAt:-1e12,rpm:NaN,rpmAt:-1e12,zeroSince:-1,crankStart:-1,crankMin:NaN,vMin:NaN,vMax:NaN,pre:[]};
+function batReset(){Object.assign(BAT,{v:NaN,vAt:-1e12,rpm:NaN,rpmAt:-1e12,zeroSince:-1,crankStart:-1,crankMin:NaN,vMin:NaN,vMax:NaN,pre:[]});}
+function batResetMinMax(){BAT.vMin=NaN;BAT.vMax=NaN;}
+function batVolts(v,t){
+  BAT.v=v;BAT.vAt=t;
+  if(isNaN(BAT.vMin)||v<BAT.vMin)BAT.vMin=v;if(isNaN(BAT.vMax)||v>BAT.vMax)BAT.vMax=v;
+  if(BAT.crankStart>=0&&t-BAT.crankStart<BAT_T.CRANK_WINDOW_MS&&(isNaN(BAT.crankMin)||v<BAT.crankMin))BAT.crankMin=v;
+  BAT.pre.push([t,v]);if(BAT.pre.length>16)BAT.pre.shift();
+}
+function batRpm(r,t){
+  BAT.rpm=r;BAT.rpmAt=t;
+  if(r>0){
+    if(BAT.zeroSince>=0&&t-BAT.zeroSince>=BAT_T.ENGINE_OFF_AFTER_MS){ // engine was off and RPM rose: a start
+      BAT.crankStart=t;BAT.crankMin=NaN;
+      for(const [pt,pv] of BAT.pre)if(t-pt<=BAT_T.CRANK_PRE_MS&&(isNaN(BAT.crankMin)||pv<BAT.crankMin))BAT.crankMin=pv;
+    }
+    BAT.zeroSince=-1;
+  }else if(BAT.zeroSince<0)BAT.zeroSince=t;
+}
+function batOff(v){const T=BAT_T;return v>=T.OFF_GOOD_V?{label:"Good",level:"ok"}:v>=T.OFF_FAIR_V?{label:"Fair",level:"warn"}:v>=T.OFF_POOR_V?{label:"Low",level:"bad"}:{label:"Poor",level:"bad"};}
+function batRun(v){const T=BAT_T;
+  if(v>=T.RUN_OK_LO&&v<=T.RUN_OK_HI)return {label:"Charging OK",level:"ok"};
+  if(v>T.RUN_CHECK_HI)return {label:"Overcharge",level:"bad"};
+  if(v<T.RUN_CHECK_LO)return {label:"Low charge",level:"bad"};
+  return {label:"Check charging",level:"warn"};}
+function batCrank(v){const T=BAT_T;return v>=T.CRANK_GOOD_V?{label:"Start: good",level:"ok"}:v>=T.CRANK_WEAK_V?{label:"Start: weak",level:"warn"}:{label:"Start: poor battery",level:"bad"};}
+function batView(t){
+  const T=BAT_T,w={state:"NO_DATA",level:"none",label:"No voltage",volts:NaN,crankMin:BAT.crankMin,crankLabel:"",crankLevel:"none",vMin:BAT.vMin,vMax:BAT.vMax};
+  if(!isNaN(BAT.crankMin)){const c=batCrank(BAT.crankMin);w.crankLabel=c.label;w.crankLevel=c.level;}
+  if(isNaN(BAT.v)||t-BAT.vAt>T.STALE_MS)return w;
+  w.volts=BAT.v;const rOk=!isNaN(BAT.rpm)&&t-BAT.rpmAt<=T.STALE_MS;
+  if(!rOk){w.state="NO_RPM";w.label="Voltage only (no RPM)";}
+  else if(BAT.rpm>0){
+    if(BAT.crankStart>=0&&t-BAT.crankStart<T.CRANK_WINDOW_MS){w.state="CRANKING";w.label="Cranking";}
+    else{const r=batRun(BAT.v);w.state="RUNNING";w.label=r.label;w.level=r.level;}
+  }else if(BAT.zeroSince>=0&&t-BAT.zeroSince>=T.ENGINE_OFF_AFTER_MS){const o=batOff(BAT.v);w.state="OFF";w.label=o.label;w.level=o.level;}
+  else{w.state="SETTLING";w.label="Engine just stopped";}
+  return w;
+}
+function batHealthSuffix(){
+  if(isNaN(BAT.vMin))return "";
+  let x=" vmin="+BAT.vMin.toFixed(1)+" vmax="+BAT.vMax.toFixed(1);
+  if(!isNaN(BAT.crankMin))x+=" crankmin="+BAT.crankMin.toFixed(1);
+  return x;
+}
+(function(){ // static tick labels, once
+  const g=$("batTicks");if(!g)return;let h="";const T=BAT_T;
+  for(let v=T.GAUGE_MIN_V;v<=T.GAUGE_MAX_V;v++){
+    const a=(135+270*(v-T.GAUGE_MIN_V)/(T.GAUGE_MAX_V-T.GAUGE_MIN_V))*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+    h+='<line class="tick" x1="'+(100+90*c).toFixed(2)+'" y1="'+(100+90*s).toFixed(2)+'" x2="'+(100+96*c).toFixed(2)+'" y2="'+(100+96*s).toFixed(2)+'"/>';
+    h+='<text class="tl" x="'+(100+105*c).toFixed(2)+'" y="'+(100+105*s+3).toFixed(2)+'">'+v+'</text>';
+  }
+  g.innerHTML=h;
+  const n=$("batNote");if(n)n.textContent=BAT_T.DISCLAIMER+" Thresholds: "+BAT_T.TAG+". Engine off (RPM 0 for 2 s): "+BAT_T.OFF_GOOD_V+" V and up Good, "+BAT_T.OFF_FAIR_V+" to "+BAT_T.OFF_GOOD_V+" Fair, below "+BAT_T.OFF_FAIR_V+" Low, below "+BAT_T.OFF_POOR_V+" Poor. Running: "+BAT_T.RUN_OK_LO+" to "+BAT_T.RUN_OK_HI+" Charging OK. Cranking minimum: "+BAT_T.CRANK_GOOD_V+" V and up good, "+BAT_T.CRANK_WEAK_V+" to "+BAT_T.CRANK_GOOD_V+" weak, below "+BAT_T.CRANK_WEAK_V+" poor.";
+})();
+function renderBattery(now){
+  const w=batView(now),T=BAT_T,col={ok:"var(--ok)",warn:"var(--warn)",bad:"var(--bad)",none:"var(--acc)"}[w.level];
+  const pct=isNaN(w.volts)?0:Math.max(0,Math.min(1,(w.volts-T.GAUGE_MIN_V)/(T.GAUGE_MAX_V-T.GAUGE_MIN_V)));
+  const arc=$("batArc"),nd=$("batNeedle");
+  arc.setAttribute("stroke-dasharray",(pct*270).toFixed(2)+" 400");arc.style.stroke=col;arc.style.visibility=pct<0.004?"hidden":"visible";
+  if(isNaN(w.volts))nd.setAttribute("visibility","hidden");
+  else{const a=(135+270*pct)*Math.PI/180,c=Math.cos(a),s=Math.sin(a);nd.setAttribute("x1",(100+64*c).toFixed(2));nd.setAttribute("y1",(100+64*s).toFixed(2));nd.setAttribute("x2",(100+98*c).toFixed(2));nd.setAttribute("y2",(100+98*s).toFixed(2));nd.setAttribute("visibility","visible");}
+  $("batBig").textContent=isNaN(w.volts)?"–":w.volts.toFixed(1);
+  const st=$("batState");st.textContent=w.label;st.style.color=col;
+  $("batBox").setAttribute("aria-label","Battery voltage "+(isNaN(w.volts)?"no data":w.volts.toFixed(1)+" volts, "+w.label));
+  $("batCrank").textContent=isNaN(w.crankMin)?"Cranking min: – (start the engine to measure)":"Cranking min: "+w.crankMin.toFixed(1)+" V  "+w.crankLabel;
+  $("batMM").textContent=isNaN(w.vMin)?"":"Min "+w.vMin.toFixed(1)+" V, max "+w.vMax.toFixed(1)+" V since this recording or connection";
+}
 const OBD=new Map(); // pid -> {v,t,def,ecu}
 const UV=new Map(); // decoder uid -> {v,t,lo,hi}
 let twin=null;
 function resetLive(){
-  ids.clear();OBD.clear();UV.clear();FR.total=0;lastFrameAt=0;buf="";
+  batReset();ids.clear();OBD.clear();UV.clear();FR.total=0;lastFrameAt=0;buf="";
   for(const k of Object.keys(H))if(k!=="unknown")H[k]=0;H.unknown.clear();L.bits=0;L.t=0;L.load=0;
 }
 
@@ -520,7 +620,7 @@ function loadSig(){
   SIG=(s&&typeof s==="object")?s:{};
 }
 function saveSig(){lsSet("hcl.sig."+cfg.profile,SIG);}
-const KNOWN={"0x100 B4":"RPM (high byte)","0x100 B5":"RPM (low byte)","0x150 B0":"Gear","0x12B B0":"Wheel A speed (hi)","0x12B B1":"Wheel A speed (lo)","0x12B B2":"Wheel B speed (hi)","0x12B B3":"Wheel B speed (lo)","0x80 B0":"Front brake (bit0)","0x80 B7":"Clutch bit2 / side stand bit5","0x80 B1":"analog (candidate)","0x140 B1":"counter hi","0x140 B2":"counter mid","0x140 B3":"counter lo"};
+const KNOWN={"0x100 B4":"RPM (high byte)","0x100 B5":"RPM (low byte)","0x150 B0":"Gear","0x12B B0":"Front wheel speed (hi) (likely)","0x12B B1":"Front wheel speed (lo) (likely)","0x12B B2":"Rear wheel speed (hi) (likely)","0x12B B3":"Rear wheel speed (lo) (likely)","0x80 B0":"unverified: on when engine off (was front brake)","0x80 B7":"Clutch bit2 / side stand bit5 / neutral bit6 (likely)","0x211 B0":"Engine temp raw-40 C (likely)","0x211 B1":"Intake air temp raw-40 C (likely)","0x211 B2":"Battery voltage raw x0.1 V (strong evidence)","0x80 B1":"analog (candidate)","0x140 B1":"counter hi","0x140 B2":"counter mid","0x140 B3":"counter lo"};
 const sigKey=(k,i)=>idStr(k)+" B"+i;
 const sigKeys=()=>Object.keys(SIG).filter(k=>/^0x[0-9A-F]+ B\d$/.test(k));
 
@@ -598,6 +698,10 @@ function loadTick(now){
   if(dt>=1000){L.load=Math.min(1.5,L.bits*1000/dt/(curRate()*1000));L.bits=0;L.t=now;}
 }
 function frameBits(ext,n){return ((ext?54:34)+8*n)*1.2+13;} // estimate incl. ~20% stuffing
+const FAST_ID_MAX_PERIOD_MS=220; // typical period of an ID running at >= 5 Hz (200 ms plus jitter margin)
+function isFastId(per){return per>0&&per<=FAST_ID_MAX_PERIOD_MS;}
+// a break in the frame stream (connect, disconnect, bitrate trial, rate change) is not a bus gap
+function markDiscontinuity(){for(const s of ids.values()){s.seenAt=0;s.gapAt=0;}H.stale=0;}
 function mkStats(key,now){
   return {key,n:0,last:null,t0:now,hz:0,wn:0,wt:now,ch:new Array(8).fill(0),cnt:new Array(8).fill(0),
     hist:Array.from({length:8},()=>new Uint32Array(256)),tog:new Uint32Array(64),ring:[],
@@ -615,14 +719,16 @@ function onFrame(id,ext,data){
   lastFrameAt=now;s.n++;s.wn++;
   if(s.seenAt){
     const dt=now-s.seenAt,thr=Math.max(1000,5*s.per);
-    if(s.n>6&&dt>thr){s.gapN++;if(dt>s.gapMax)s.gapMax=dt;s.gapAt=now;H.stale++;}
+    // only an ID that normally runs at >= 5 Hz can have a "gap"; slower IDs are not expected to be continuous
+    if(s.n>6&&isFastId(s.per)&&dt>thr){s.gapN++;if(dt>s.gapMax)s.gapMax=dt;s.gapAt=now;H.stale++;}
     else s.per=s.per?s.per*.9+dt*.1:dt;
   }
   s.seenAt=now;bumpBucket(s,now);
   const kn=prof().known;
   if(kn&&!kn.includes(key)&&!SIG["id:"+key]){H.unknown.set(key,(H.unknown.get(key)||0)+1);}
   if(kn&&data.length<8&&kn.includes(key))H.dlcOdd++;
-  if(isHunter()&&key===0x100&&data.length>5)noteRpm(data[4]<<8|data[5],now);
+  if(isHunter()&&key===0x100&&data.length>5){noteRpm(data[4]<<8|data[5],now);batRpm(data[4]<<8|data[5],now);}
+  if(isHunter()&&key===0x211&&!ext&&data.length>2)batVolts(data[2]*0.1,now);
   if(isHunter()&&key===0x140&&data.length>=4){const v=data[1]<<16|data[2]<<8|data[3];if(s.ctr!=null){const dv=(v-s.ctr)&0xFFFFFF;if(dv>8)H.ctrJump++;}s.ctr=v;}
   for(let i=0;i<data.length;i++)s.hist[i][data[i]]++;
   if(s.last){const m=Math.min(s.last.length,data.length);for(let i=0;i<m;i++){const x=s.last[i]^data[i];if(x){s.ch[i]=now;s.cnt[i]++;for(let b=0;b<8;b++)if(x>>b&1)s.tog[i*8+b]++;}}}
@@ -1074,6 +1180,7 @@ function connectDefault(){
   return go(a.id,()=>connectAdapter(a.id));
 }
 function setConn(on){
+  markDiscontinuity();
   $("bSerial").disabled=on||reconnecting||!adCur();$("bDisc").disabled=!(on||reconnecting);
   if(!on&&!reconnecting)link=null;
   if(!link)diagReset();
@@ -1106,7 +1213,7 @@ async function autoDetect(){
   if(MODE==="diag"){toast("Return to Monitor before auto-detect.");return null;}
   if(link.kind==="elm"){toast("Auto-detect is not available for ELM327.");return null;}
   if(detecting)return null;
-  detecting=true;setConn(!!link);
+  detecting=true;markDiscontinuity();setConn(!!link);
   const prev=curRate();let found=null;
   try{
     for(const k of DETECT_ORDER){
@@ -1126,7 +1233,7 @@ async function autoDetect(){
       $("detInfo").textContent="No clean traffic at 500k, 250k, 125k or 1M. Check wiring, ignition and termination.";toast("Auto-detect found no valid bitrate.");
     }
   }catch(e){log("Auto-detect error: "+e.message);}
-  detecting=false;setConn(!!link);
+  detecting=false;markDiscontinuity();setConn(!!link);
   return found;
 }
 $("bDetect").onclick=autoDetect;
@@ -1164,10 +1271,12 @@ async function flush(r){
   }catch(e){if(!idbWarned){idbWarned=true;log("Autosave unavailable: "+e.message);}}
 }
 setInterval(()=>flush(rec),3000);
-function healthLine(){return "# HEALTH bad="+H.bad+" resync="+H.resync+" bel="+H.bel+" overflow="+H.overflow+" gaps="+H.stale+" ctrjump="+H.ctrJump+" load="+Math.round(L.load*100)+" filtered="+H.filtered;}
+function healthLine(){return healthLineBase_()+batHealthSuffix();}
+function healthLineBase_(){return "# HEALTH bad="+H.bad+" resync="+H.resync+" bel="+H.bel+" overflow="+H.overflow+" gaps="+H.stale+" ctrjump="+H.ctrJump+" load="+Math.round(L.load*100)+" filtered="+H.filtered;}
 $("bRec").onclick=async()=>{
   if(!rec){
     const t0=new Date();
+    batResetMinMax();
     rec={label:$("lbl").value||"capture",start:nowMs(),lines:[],t0,sid:t0.toISOString(),flushed:0,chunk:0,prof:cfg.profile};
     for(const l of headerLines(rec.label,t0))rec.lines.push(l);
     $("bRec").textContent="Stop recording";$("bMark").disabled=false;$("bSave").disabled=true;$("bDetect").disabled=true;
@@ -1370,7 +1479,7 @@ $("bDecImp").onclick=()=>importJson($("decJson").value);
 $("decFile").onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$("decJson").value=r.result;importJson(r.result);};r.readAsText(f);};
 
 // ---------- health status ----------
-function stalledIds(now){const o=[];for(const s of ids.values()){if(s.n>6&&s.per&&s.per<1000&&now-s.seenAt>Math.max(1000,5*s.per))o.push(s);}return o;}
+function stalledIds(now){const o=[];for(const s of ids.values()){if(s.n>6&&s.seenAt&&isFastId(s.per)&&now-s.seenAt>Math.max(1000,5*s.per))o.push(s);}return o;}
 function status(now){
   if(!link)return {lvl:-1,label:"IDLE",reasons:["Not connected."]};
   loadTick(now);
@@ -1403,7 +1512,7 @@ function heroVals(now){
   let rpm=null,spd=null,spdU="km/h",gear=null,rpmSrc="",spdSrc="";
   if(isHunter()){
     let d=last(0x100);if(d&&d.length>5){rpm=d[4]<<8|d[5];rpmSrc="0x100";}
-    d=last(0x12B);if(d&&d.length>1&&!(d[0]===0xFF&&d[1]===0xFF)){spd=(d[0]<<8|d[1])/10;spdSrc="wheel A";}
+    d=last(0x12B);if(d&&d.length>1&&!(d[0]===0xFF&&d[1]===0xFF)){spd=(d[0]<<8|d[1])/10;spdSrc="front wheel";}
     d=last(0x150);if(d)gear=GEAR[d[0]]??("0x"+hex2(d[0]));
   }else{
     const o=OBD.get(0x0C);if(o&&now-o.t<5000){rpm=o.v;rpmSrc="OBD";}
@@ -1458,9 +1567,10 @@ function renderHunter(){
   if((d=last(0x12B))){const a=d[0]<<8|d[1],b=d[2]<<8|d[3];
     $("wa").textContent=(d[0]===0xFF&&d[1]===0xFF)?"–":(a/10).toFixed(1);
     $("wb").textContent=(d[2]===0xFF&&d[3]===0xFF)?"–":(b/10).toFixed(1);}
-  if((d=last(0x80))){$("b1").textContent=d[1];$("pFb").classList.toggle("on",!!(d[0]&1));$("pCl").classList.toggle("on",!!(d[7]&4));$("pSs").classList.toggle("on",!!(d[7]&0x20));}
+  if((d=last(0x80))){$("b1").textContent=d[1];$("pB0").classList.toggle("on",!!(d[0]&1));$("pNe").classList.toggle("on",!!(d[7]&0x40));$("pCl").classList.toggle("on",!!(d[7]&4));$("pSs").classList.toggle("on",!!(d[7]&0x20));}
   if((d=last(0x140)))$("ctr").textContent=(d[1]<<16|d[2]<<8|d[3]);
-  if((d=last(0x211)))$("tmp").textContent=[d[0],d[1],d[2]].map(x=>x-40).join(" / ");
+  if((d=last(0x211))&&d.length>2){$("engT").textContent=d[0]-40;$("intT").textContent=d[1]-40;$("batV").textContent=(d[2]*0.1).toFixed(1);}
+  renderBattery(nowMs());
   if((d=last(0x120)))$("map").textContent=d[0]*10;
 }
 function renderObd(now){
@@ -1545,7 +1655,7 @@ function drawGaps(now){
   rows.forEach((s,r)=>{
     const y=r*rh+2;g.fillStyle="#94a9c6";g.fillText(idStr(s.key),2,y+rh/2-1);
     for(let c=0;c<30;c++){const sc=sec-30+c;if(sc<s.firstSec)continue;
-      const n=bucket(s,sc);g.fillStyle=n>0?"#22d3ee":(s.per&&s.per<1000?"#ff6b6b":"#2a3a52");g.fillRect(lw+c*cw+1,y,cw-2,rh-3);}
+      const n=bucket(s,sc);g.fillStyle=n>0?"#22d3ee":(isFastId(s.per)?"#ff6b6b":"#2a3a52");g.fillRect(lw+c*cw+1,y,cw-2,rh-3);}
   });
   const lines=rows.filter(s=>s.gapN).map(s=>idStr(s.key)+": "+s.gapN+" gap(s), longest "+(s.gapMax/1000).toFixed(1)+" s");
   $("gapTxt").textContent=lines.length?lines.join("\n"):(rows.length?"No gaps seen.":"No IDs yet.");

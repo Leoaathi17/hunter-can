@@ -79,7 +79,7 @@ The 20 v2 checks (section D) plus 21 for v3 on headless Chrome with a mock seria
 | 24 | Round trip: Hunter recording of real sample -> analyzer | PASS | 42580 frames re-read, same RPM/gear/wheel/counter lines as the original capture; legacy synth.txt output unchanged except one renamed heading |
 | 25 | Legacy raw serial log + 29-bit | PASS | old header-less logs still parse |
 | 26 | Reconnect + autosave + recover | PASS | cable drop mid-recording, markers, setup re-sent, 28k lines recovered from IndexedDB, clear autosaves, user disconnect sends C |
-| 27 | Service worker | PASS | cache `hcl-v3.0` (test changed, see below), all files exist, old `hunter-v1` cache purged, offline fallback, POST/cross-origin untouched |
+| 27 | Service worker | PASS | cache `hcl-v3.1` (test changed, see below), all files exist, old `hunter-v1` cache purged, offline fallback, POST/cross-origin untouched |
 | 28 | UX statics | PASS | five tabs, read-only notice, onboarding text, safe areas, reduced motion, landscape rule |
 | 29 | Contrast (WCAG) | PASS | ink 13.9:1, muted 6.5:1, accent 8.6:1, ok 8.1:1, warn 9.3:1, bad 5.6:1 (worst over the four surfaces) |
 | 30 | Global allow-list audit | PASS | all commands any mock adapter received (80+) were on the allow-list |
@@ -113,3 +113,26 @@ Everything below is UNVERIFIED. Treat v3 as untested on hardware.
 **Inherited from v2 (still unverified)**
 - Web Serial / WebUSB permission prompts and real CDC behaviour on the POCO X5 PRO; the CANable accepting `S`, `M1`, `O` in that order and staying silent; error beeps; auto-detect on a real bus; decoder correctness on a vehicle; throughput, battery and wake-lock on Android; cable-drop timing; counter/checksum hints on real ECUs; visual quality on a physical OLED panel; installing as a PWA from GitHub Pages (service worker needs https).
 - The Hunter signal decoders are unchanged from v1; their field validation status is whatever v1 had.
+
+
+## v3.1: Hunter 350 signal-map corrections and Battery gauge (from the user's real captures, 2026-11-15)
+
+Tests: `node tests/signals.js` (13 tests, uses `tests/data/real/*.txt`), plus the existing smoke.js, v3.js, browser.js. Not tested on hardware: everything here was checked by replaying the recorded captures, not on a bike or phone.
+
+Signal map now used (PWA, APK and `tools/hunter_analyze.py`):
+
+| Signal | Decoding | Tag |
+|---|---|---|
+| 0x211 B2 | battery voltage, raw x 0.1 V (13.8 V running, ~12.4 V engine off, ~11.2 V cranking) | strong evidence |
+| 0x211 B0 | engine temperature, raw - 40 C | likely |
+| 0x211 B1 | intake air temperature, raw - 40 C | likely |
+| 0x12B B0:B1 / 10 km/h | FRONT wheel (wheel A) | likely |
+| 0x12B B2:B3 / 10 km/h | REAR wheel (wheel B). Evidence: gear test, wheel B 4-5 km/h while A was 0, bike presumably on a stand | likely |
+| 0x080 B7 bit6 (0x40) | neutral: set in neutral, clears in 1st gear. UNRESOLVED: it also clears when the kill switch is turned off | likely |
+| 0x080 B0 bit0 | UNVERIFIED: on whenever the engine is off. It was labelled front brake, but never turned on in the running-engine front-brake captures | unverified |
+
+Not found on CAN: horn, high beam, low beam, pass/flash, rear brake. Only the electrical load of pass/flash shows as a dip in the 0x211 B2 voltage.
+
+Health "gaps" counter: the old rule counted a gap for any ID when the silence exceeded max(1 s, 5 periods) even for slow IDs, and did not forget the last-frame time across a disconnect, reconnect or bitrate-detect trial. The recorded captures contain no real silence > 1 s on any ID (the analyzer's "Real gaps" line is 0 for all of them) yet the app reported gaps=25..50 per capture. The exact trigger in the live app was not reproduced (only the recorded files were available); the likely source is the link set-up/detection phase. The fix: only an ID whose typical period is <= 220 ms (>= 5 Hz) can have a gap, and `markDiscontinuity()` / `discontinuity()` is called on connect, disconnect and around bitrate detection. Regression tests replay the real Horn capture (and six more) and expect gaps = 0, plus synthetic reconnect/detect cases that failed with the old rule.
+
+Battery gauge: a voltage-state indicator (engine off / running / cranking minimum), NOT a battery state-of-health measurement. Thresholds are typical 12 V lead-acid values, unverified for this bike; they live in one block (`BAT_T` in index.html, constants at the top of `BatteryMonitor.java`). The capture HEALTH footer now ends with `vmin= vmax= crankmin=` when voltage was seen. Known limitation: right after a start the voltage is still recovering (12-13 V) and the gauge says "Low charge" until it climbs above 13.0 V.

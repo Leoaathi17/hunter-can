@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.hunter.canlogger.core.BatteryMonitor;
 import com.hunter.canlogger.core.CanEngine;
 import com.hunter.canlogger.core.CanId;
 import com.hunter.canlogger.core.Dashboard;
@@ -28,8 +29,11 @@ final class LiveTab extends PageTab {
     private final GaugeView gauge;
     private final TextView spd, spdUnit, spdTag, gear, gearTag;
     private final LinearLayout hunterCard;
-    private final TextView wa, wb, b1, ctr, tmp, map;
-    private final TextView pFb, pCl, pSs;
+    private final TextView wa, wb, b1, ctr, engT, intT, batV, map;
+    private final TextView pB0, pNe, pCl, pSs;
+    private final BatteryGaugeView batGauge;
+    private final LinearLayout batCard;
+    private final TextView batCrank, batMinMax;
     private final LinearLayout obdCard;
     private final TextView obdNote;
     private final LinearLayout obdGrid;
@@ -87,25 +91,52 @@ final class LiveTab extends PageTab {
         hunterCard = Ui.card(ctx);
         hunterCard.addView(Ui.h2(ctx, "Hunter 350 signals"));
         LinearLayout r1 = Ui.hbox(ctx), r2 = Ui.hbox(ctx), r3 = Ui.hbox(ctx);
-        wa = Ui.tile(ctx, r1, "Wheel A km/h (scale ok)", 24);
-        wb = Ui.tile(ctx, r1, "Wheel B km/h (rear? unconfirmed)", 24);
+        LinearLayout r4 = Ui.hbox(ctx);
+        wa = Ui.tile(ctx, r1, "Front wheel km/h (" + Dashboard.TAG_WHEEL_FRONT + ")", 24);
+        wb = Ui.tile(ctx, r1, "Rear wheel km/h (" + Dashboard.TAG_WHEEL_REAR + ")", 24);
         b1 = Ui.tile(ctx, r2, "0x080 B1 analog (candidate)", 24);
         ctr = Ui.tile(ctx, r2, "0x140 counter 24-bit (hypothesis)", 24);
-        tmp = Ui.tile(ctx, r3, "0x211 B0/B1/B2 °C (raw-40, provisional)", 17);
-        map = Ui.tile(ctx, r3, "0x120 B0 MAP mbar (candidate)", 24);
+        engT = Ui.tile(ctx, r3, "Engine temp °C (" + Dashboard.TAG_ENGINE_TEMP + ")", 24);
+        intT = Ui.tile(ctx, r3, "Intake temp °C (" + Dashboard.TAG_INTAKE_TEMP + ")", 24);
+        batV = Ui.tile(ctx, r4, "Battery V (" + Dashboard.TAG_BATTERY + ")", 24);
+        map = Ui.tile(ctx, r4, "0x120 B0 MAP mbar (candidate)", 24);
         hunterCard.addView(r1);
         hunterCard.addView(r2);
         hunterCard.addView(r3);
+        hunterCard.addView(r4);
         LinearLayout pills = Ui.hbox(ctx);
-        pFb = pill("Front brake");
+        pB0 = pill(Dashboard.LABEL_B0BIT0);
+        pNe = pill("Neutral (likely)");
         pCl = pill("Clutch");
         pSs = pill("Side stand");
-        pills.addView(pFb);
+        pills.addView(pB0);
+        pills.addView(pNe);
         pills.addView(pCl);
         pills.addView(pSs);
         pills.setPadding(0, Ui.dp(ctx, 8), 0, 0);
         hunterCard.addView(pills);
+        hunterCard.addView(Ui.note(ctx, "0x080 B0 bit0 was labelled front brake but never turned on with the engine running; it is on whenever the engine is off. "
+                + "Neutral (0x080 B7 bit6) also clears when the kill switch is turned off: unresolved. Horn, high/low beam, pass/flash and rear brake "
+                + "were not found on CAN (pass/flash only shows as a battery-voltage dip)."));
         Ui.addCard(page, hunterCard);
+
+        // ---- battery
+        batCard = Ui.card(ctx);
+        batCard.addView(Ui.h2(ctx, "Battery"));
+        batGauge = new BatteryGaugeView(ctx);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(Ui.WRAP, Ui.WRAP);
+        bl.gravity = Gravity.CENTER_HORIZONTAL;
+        batCard.addView(batGauge, bl);
+        batCrank = Ui.mono(ctx, "Cranking min: – (start the engine to measure)", 14, Ui.INK);
+        batCard.addView(batCrank);
+        batMinMax = Ui.note(ctx, "");
+        batCard.addView(batMinMax);
+        batCard.addView(Ui.note(ctx, BatteryMonitor.DISCLAIMER + " Engine off (RPM 0 for 2 s): "
+                + BatteryMonitor.OFF_GOOD_V + " V and up Good, " + BatteryMonitor.OFF_FAIR_V + " to " + BatteryMonitor.OFF_GOOD_V + " Fair, below "
+                + BatteryMonitor.OFF_FAIR_V + " Low, below " + BatteryMonitor.OFF_POOR_V + " Poor. Running: " + BatteryMonitor.RUN_OK_LO + " to "
+                + BatteryMonitor.RUN_OK_HI + " Charging OK. Cranking minimum: " + BatteryMonitor.CRANK_GOOD_V + " V and up good, "
+                + BatteryMonitor.CRANK_WEAK_V + " to " + BatteryMonitor.CRANK_GOOD_V + " weak, below " + BatteryMonitor.CRANK_WEAK_V + " poor."));
+        Ui.addCard(page, batCard);
 
         // ---- OBD
         obdCard = Ui.card(ctx);
@@ -188,16 +219,27 @@ final class LiveTab extends PageTab {
     public void refresh(CanEngine.Snapshot s, long nowNs) {
         fastRefresh(s.hero, s.hunter);
         hunterCard.setVisibility(s.hunter ? View.VISIBLE : View.GONE);
+        batCard.setVisibility(s.hunter ? View.VISIBLE : View.GONE);
+        if (s.hunter && s.battery != null) {
+            BatteryMonitor.View bv = s.battery;
+            batGauge.setView(bv);
+            batCrank.setText(Double.isNaN(bv.crankMin) ? "Cranking min: – (start the engine to measure)"
+                    : String.format(Locale.ROOT, "Cranking min: %.1f V  %s", bv.crankMin, bv.crankLabel));
+            batMinMax.setText(Double.isNaN(bv.vMin) ? "" : String.format(Locale.ROOT, "Min %.1f V, max %.1f V since this recording or connection", bv.vMin, bv.vMax));
+        }
         obdCard.setVisibility(s.hunter ? View.GONE : View.VISIBLE);
         if (s.hunter) {
             Dashboard d = s.dash;
-            wa.setText(d.wheelA);
-            wb.setText(d.wheelB);
+            wa.setText(d.wheelFront);
+            wb.setText(d.wheelRear);
             b1.setText(d.b1);
             ctr.setText(d.counter);
-            tmp.setText(d.temps);
+            engT.setText(d.engineTemp);
+            intT.setText(d.intakeTemp);
+            batV.setText(d.batteryV);
             map.setText(d.map);
-            setPill(pFb, d.frontBrake);
+            setPill(pB0, d.b0bit0);
+            setPill(pNe, d.neutral);
             setPill(pCl, d.clutch);
             setPill(pSs, d.sideStand);
         } else {
